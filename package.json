@@ -1,0 +1,34 @@
+{
+    "name": "optima-apm-monorepo",
+    "version": "1.0.0",
+    "description": "Lightweight, real-time Application Performance Monitoring (APM) and telemetry package for Node.js applications.",
+    "private": false,
+    "engines": {
+        "node": ">=20.0.0",
+        "npm": ">=10.0.0"
+    },
+    "workspaces": [
+        "packages/*",
+        "apps/*"
+    ],
+    "keywords": [
+        "nestjs",
+        "express",
+        "typescript",
+        "monitoring",
+        "metrics",
+        "backend-performance",
+        "server-health"
+    ],
+    "scripts": {
+        "clean": "npm run clean --workspaces --if-present && rm -rf dist .next out",
+        "build:dashboard": "npm run build --workspace=@optima-apm/dashboard",
+        "build:core": "npm run build --workspace=@optima-apm/core",
+        "build": "npm run build:dashboard && npm run build:core",
+        "dev:dashboard": "npm run dev --workspace=@optima-apm/dashboard",
+        "dev:core": "npm run dev --workspace=@optima-apm/core",
+        "dev:express": "npm run dev --workspace=express-demo",
+        "dev:nest": "npm run dev --workspace=nest-demo",
+        "test": "npm run test --workspace=@optima-apm/core"
+    }
+}

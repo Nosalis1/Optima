@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@optima-apm/core": [
+                "packages/core/src/index.ts"
+            ],
+            "@optima-apm/core/*": [
+                "packages/core/src/*"
+            ],
+            "@core/*": [
+                "packages/core/src/*"
+            ]
+        }
+    }
+}

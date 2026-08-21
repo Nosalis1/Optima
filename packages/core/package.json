@@ -1,0 +1,74 @@
+{
+    "name": "apm-optima",
+    "version": "1.0.1",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "publishConfig": {
+        "access": "public"
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./express": {
+            "types": "./dist/express/index.d.ts",
+            "default": "./dist/express/index.js"
+        },
+        "./nest": {
+            "types": "./dist/nest/index.d.ts",
+            "default": "./dist/nest/index.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "typesVersions": {
+        "*": {
+            "express": [
+                "dist/express/index.d.ts"
+            ],
+            "nest": [
+                "dist/nest/index.d.ts"
+            ]
+        }
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE",
+        "CONTRIBUTING.md",
+        "docs",
+        "package.json"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "test": "jest"
+    },
+    "peerDependencies": {
+        "express": "^4.0.0",
+        "@nestjs/websockets": "^10.0.0 || ^11.0.0",
+        "socket.io": "^4.0.0"
+    },
+    "peerDependenciesMeta": {
+        "express": {
+            "optional": true
+        },
+        "@nestjs/websockets": {
+            "optional": true
+        },
+        "socket.io": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@nestjs/websockets": "^11.2.1",
+        "express": "^4.19.2",
+        "socket.io": "^4.8.3",
+        "@types/express": "^4.17.21",
+        "@types/jest": "^29.5.14",
+        "@types/node": "^20.0.0",
+        "@types/socket.io": "^3.0.1",
+        "jest": "^29.0.0",
+        "ts-jest": "^29.0.0",
+        "typescript": "^5.0.0"
+    }
+}
