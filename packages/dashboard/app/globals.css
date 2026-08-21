@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+:root {
+  /* Chart Colors */
+
+  /* CPU / Main Parameter */
+  --chart-1: #059669;
+  /* Memory / RAM */
+  --chart-2: #4F46E5;
+  /* Success Rate */
+  --chart-3: #10B981;
+  /* Event Loop Lag */
+  --chart-4: #D97706;
+  /* Critical Errors / Anomalies */
+  --chart-5: #DC2626;
+  /* Active Handles / Network Traffic */
+  --chart-6: #0D9488;
+
+  /* UI Elements */
+
+  /* Darkest / Main Text and Headings */
+  --variant-6: #18221F;
+  /* Secondary Text, Subheadings and Supporting Labels */
+  --variant-5: #52635D;
+  /* Primary Accent Color - For Active Icons, Buttons and Accents */
+  --variant-4: #059669;
+  /* Borders, Panel Dividers and Grid Lines */
+  --variant-3: #D1DED9;
+  /* Screen Background */
+  --variant-2: #F2F5F4;
+  /* Card Background */
+  --variant-1: #FFFFFF;
+}
+
+.dark {
+  /* Chart Colors */
+
+  /* CPU / Main Parameter */
+  --chart-1: #34D399;
+  /* Memory / RAM */
+  --chart-2: #818CF8;
+  /* Success Rate */
+  --chart-3: #6EE7B7;
+  /* Event Loop Lag */
+  --chart-4: #FBBF24;
+  /* Critical Errors / Anomalies */
+  --chart-5: #F87171;
+  /* Active Handles / Network Traffic */
+  --chart-6: #2DD4BF;
+
+  /* UI Elements */
+
+  /* Darkest / Main Text and Headings */
+  --variant-6: #E2E8F0;
+  /* Secondary Text, Subheadings and Supporting Labels */
+  --variant-5: #94A3B8;
+  /* Primary Accent Color - For Active Icons, Buttons and Accents */
+  --variant-4: #34D399;
+  /* Borders, Panel Dividers and Grid Lines */
+  --variant-3: #1E293B;
+  /* Screen Background */
+  --variant-2: #0B1311;
+  /* Card Background */
+  --variant-1: #121E1B;
+}
+
+@theme inline {
+  --color-background: var(--variant-2);
+
+  --color-card: var(--variant-1);
+  --color-border: var(--variant-3);
+
+  --color-foreground: var(--variant-6);
+
+  --color-accent: var(--variant-4);
+  --color-accent-soft: var(--variant-5);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background:
+    radial-gradient(circle at top,
+      var(--variant-3),
+      transparent 70%),
+    linear-gradient(180deg,
+      var(--color-background) 0%,
+      var(--color-background) 100%);
+  color: var(--color-foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
