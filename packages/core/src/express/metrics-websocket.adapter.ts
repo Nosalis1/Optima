@@ -34,7 +34,9 @@ export class ExpressWebSocketAdapter
         this.io = new SocketIOServer(
             this.server,
             {
-                transports: ['websocket'],
+                transports: ['polling', 'websocket'],
+
+                path: '/socket.io/',
 
                 maxHttpBufferSize: 1e8, // 100MB
 
@@ -42,7 +44,8 @@ export class ExpressWebSocketAdapter
                 pingInterval: 25000, // 25 seconds
 
                 cors: {
-                    origin: '*',
+                    origin: true,
+                    credentials: true,
                     methods: ['GET', 'POST'],
                 },
             },

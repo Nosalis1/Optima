@@ -51,6 +51,11 @@ class Logger {
         );
     }
 
+    static error(message: string, ...args: unknown[]): void {
+        const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
+        console.error(`${Logger.DIM}[${timestamp}]${Logger.RESET} [Optima] ${Logger.COLORS.ERROR}${message}${Logger.RESET}`, ...args);
+    }
+
     static debug(message: string, ...args: unknown[]): void {
         const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
         console.log(`${Logger.DIM}[${timestamp}]${Logger.RESET} [Optima] ${Logger.DIM}${message}${Logger.RESET}`, ...args);

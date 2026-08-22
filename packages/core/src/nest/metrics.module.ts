@@ -18,6 +18,8 @@ import {
     ConfigOptions,
     ConfigManager,
 } from '../config';
+import fs from 'fs';
+import Logger from '../core/telemetry/logger';
 
 @Global()
 @Module({
@@ -58,11 +60,18 @@ export class MetricsModule implements NestModule {
         }
 
         const dashboardRoute = config.dashboardPath;
-        const staticAssetsPath = path.resolve(__dirname, '../../../dashboard/out');
+
+        const dashboardDir = path.join(__dirname, '../../dashboard-out');
+        const indexHtmlPath = path.join(dashboardDir, 'index.html');
+
+        if (!fs.existsSync(indexHtmlPath)) {
+            Logger.error(`Dashboard not found at ${indexHtmlPath}. Please build the dashboard first.`);
+            return;
+        }
 
         consumer
             .apply(
-                express.static(staticAssetsPath),
+                express.static(dashboardDir),
                 (
                     req: express.Request,
                     res: express.Response,
@@ -70,7 +79,7 @@ export class MetricsModule implements NestModule {
                 ) => {
                     // SPA Fallback
                     if (!req.path.includes('.')) {
-                        return res.sendFile(path.join(staticAssetsPath, 'index.html'));
+                        return res.sendFile(indexHtmlPath);
                     }
                     next();
                 }

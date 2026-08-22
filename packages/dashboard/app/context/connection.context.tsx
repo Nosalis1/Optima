@@ -4,8 +4,6 @@ import { io, Socket } from "socket.io-client";
 import Loading from '../components/utility/loading';
 import type { ConfigOptions } from '../domain/config.types';
 
-const SERVER_URL = "http://localhost:3000";
-
 const ConnectionContext = React.createContext<{
     isConnected: boolean;
     isConnecting: boolean;
@@ -55,9 +53,14 @@ export function ConnectionProvider({
         setIsConnected(false);
         setIsConnecting(true);
 
-        socketRef.current = io(SERVER_URL,
+        const serverUrl = (typeof window !== 'undefined'
+            ? window.location.origin
+            : 'http://localhost:3000');
+
+        socketRef.current = io(serverUrl,
             {
-                transports: ["websocket"],
+                path: '/socket.io/',
+                transports: ["polling", "websocket"],
                 reconnection: true,
                 reconnectionAttempts: Infinity,
                 reconnectionDelay: 1000,
@@ -70,6 +73,8 @@ export function ConnectionProvider({
         socketRef.current.on("connect", () => {
             setIsConnected(true);
             setIsConnecting(false);
+
+            emit(WebSocketEvents.REQUEST_CONFIGURATION, null);
         });
 
         socketRef.current.on("disconnect", () => {
@@ -80,8 +85,6 @@ export function ConnectionProvider({
         registerEventListener(WebSocketEvents.RESPONSE_CONFIGURATION, (data: ConfigOptions) => {
             setConfiguration(data);
         });
-
-        emit(WebSocketEvents.REQUEST_CONFIGURATION, null);
 
         return () => {
             socketRef.current?.disconnect();

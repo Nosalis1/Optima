@@ -23,8 +23,9 @@
     "scripts": {
         "clean": "npm run clean --workspaces --if-present && rm -rf dist .next out",
         "build:dashboard": "npm run build --workspace=apm-optima-dashboard",
+        "copy:dashboard": "rm -rf packages/core/dashboard-out && cp -R packages/dashboard/out packages/core/dashboard-out",
         "build:core": "npm run build --workspace=apm-optima",
-        "build": "npm run build:dashboard && npm run build:core",
+        "build": "npm run build:dashboard && npm run copy:dashboard && npm run build:core",
         "version-patch": "npm version patch --workspace=packages/core --no-git-tag-version",
         "version-minor": "npm version minor --workspace=packages/core --no-git-tag-version",
         "version-major": "npm version major --workspace=packages/core --no-git-tag-version",
