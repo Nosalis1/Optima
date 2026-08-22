@@ -5,7 +5,7 @@
         "dev": "nest start --watch"
     },
     "dependencies": {
-        "@optima-apm/core": "*",
+        "apm-optima": "*",
         "@nestjs/common": "^11.1.6",
         "@nestjs/core": "^11.1.6",
         "@nestjs/platform-socket.io": "^11.2.1",

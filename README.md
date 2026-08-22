@@ -6,7 +6,7 @@
 
 <p><b>Lightweight, real-time Telemetry & Application Performance Monitoring for Node.js</b></p>
 
-[![npm version](https://img.shields.io/npm/v/@optima/core.svg?style=flat-square&color=fc6c26)](https://www.npmjs.com/package/apm-optima)
+[![npm version](https://img.shields.io/npm/v/apm-optima.svg?style=flat-square&color=fc6c26)](https://www.npmjs.com/package/apm-optima)
 [![license](https://img.shields.io/github/license/Nosalis1/Optima?style=flat-square&color=8A897C)](https://github.com/Nosalis1/Optima/blob/main/LICENSE)
 [![node version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?style=flat-square)](https://nodejs.org)
 [![npm version](https://img.shields.io/badge/npm-%3E%3D10.0.0-red?style=flat-square)](https://www.npmjs.com/)

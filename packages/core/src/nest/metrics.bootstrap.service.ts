@@ -13,6 +13,7 @@ import { NestWebSocketAdapter } from './metrics-websocket.adapter';
 import {
     type ReadonlyConfig
 } from '../config';
+import Logger from '../core/telemetry/logger';
 
 @Injectable()
 export class MetricsBootstrapService
@@ -51,7 +52,7 @@ export class MetricsBootstrapService
             correlationService.tick();
         }, this.config.tickIntervalMs);
 
-        console.log('[Optima] Nest metrics bootstrap initialized.');
+        Logger.debug('Nest metrics bootstrap initialized.');
     }
 
     onApplicationShutdown(): void {

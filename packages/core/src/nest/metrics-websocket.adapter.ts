@@ -13,6 +13,7 @@ import type { WebSocketAdapter } from '../adapters/websocket.adapter';
 
 import { WebSocketEvents } from '../core/delivery';
 import { collectorService } from '../core/telemetry/collector.service';
+import Logger from '../core/telemetry/logger';
 
 @WebSocketGateway({
     transports: ['websocket'],
@@ -35,8 +36,8 @@ export class NestWebSocketAdapter
     handleConnection(
         socket: Socket,
     ): void {
-        console.log(
-            '[Optima] Dashboard klijent se povezao.',
+        Logger.debug(
+            'Dashboard client connected.',
             socket.id,
         );
     }
@@ -44,8 +45,8 @@ export class NestWebSocketAdapter
     handleDisconnect(
         socket: Socket,
     ): void {
-        console.log(
-            '[Optima] Dashboard klijent se odjavio.',
+        Logger.debug(
+            'Dashboard client disconnected.',
             socket.id,
         );
     }

@@ -30,7 +30,6 @@ export class ConfigManager {
                 '*.css',
                 '/favicon.ico',
                 '/metrics_pack',
-                '/',
                 '/health',
                 '/optima-metrics/**',
                 '/optima-metrics/*',

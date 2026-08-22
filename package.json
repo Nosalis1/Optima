@@ -1,5 +1,5 @@
 {
-    "name": "optima-apm-monorepo",
+    "name": "apm-optima-monorepo",
     "version": "1.0.0",
     "description": "Lightweight, real-time Application Performance Monitoring (APM) and telemetry package for Node.js applications.",
     "private": false,
@@ -22,13 +22,17 @@
     ],
     "scripts": {
         "clean": "npm run clean --workspaces --if-present && rm -rf dist .next out",
-        "build:dashboard": "npm run build --workspace=@optima-apm/dashboard",
-        "build:core": "npm run build --workspace=@optima-apm/core",
+        "build:dashboard": "npm run build --workspace=apm-optima-dashboard",
+        "build:core": "npm run build --workspace=apm-optima",
         "build": "npm run build:dashboard && npm run build:core",
-        "dev:dashboard": "npm run dev --workspace=@optima-apm/dashboard",
-        "dev:core": "npm run dev --workspace=@optima-apm/core",
-        "dev:express": "npm run dev --workspace=express-demo",
-        "dev:nest": "npm run dev --workspace=nest-demo",
-        "test": "npm run test --workspace=@optima-apm/core"
+        "version-patch": "npm version patch --workspace=packages/core --no-git-tag-version",
+        "version-minor": "npm version minor --workspace=packages/core --no-git-tag-version",
+        "version-major": "npm version major --workspace=packages/core --no-git-tag-version",
+        "publish": "npm publish ./packages/core --access public",
+        "dev:dashboard": "npm run dev --workspace=apm-optima-dashboard",
+        "dev:core": "npm run dev --workspace=apm-optima",
+        "dev:express": "npm run dev --workspace=apps/express-demo",
+        "dev:nest": "npm run dev --workspace=apps/nest-demo",
+        "test": "npm run test --workspace=apm-optima"
     }
 }

@@ -16,6 +16,7 @@ import {
     random,
     randomIp,
 } from './utility';
+import Logger from "../core/telemetry/logger";
 
 
 function generateLatency(endpoint: EndpointConfig) {
@@ -174,7 +175,7 @@ export class TrafficSimulator {
         const interval = options?.intervalMs ?? 100;
         const baseRequests = options?.requestsPerTick ?? 20;
 
-        console.log("Traffic simulation started!");
+        Logger.debug("Traffic simulation started!");
 
         this.timer = setInterval(() => {
             if (IS_STABLE) {
@@ -204,7 +205,7 @@ export class TrafficSimulator {
 
         this.running = false;
 
-        console.log("Traffic simulation stopped!");
+        Logger.debug("Traffic simulation stopped!");
     }
 
     isRunning() {

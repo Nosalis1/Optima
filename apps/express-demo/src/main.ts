@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { setupOptima } from '@optima-apm/core/express';
+import { setupOptima } from 'apm-optima/express';
 
 const app = express();
 
@@ -19,6 +19,7 @@ const optima = setupOptima(app, {
         eventLoopResolutionMs: 20,
     },
     tickIntervalMs: 250,
+    consoleLog: true,
 });
 
 app.get('/api/hello', (req, res) => {

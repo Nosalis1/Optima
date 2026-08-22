@@ -14,6 +14,7 @@ import {
     WebSocketEvents
 } from '../core/delivery';
 import { ConfigManager } from '../config';
+import Logger from '../core/telemetry/logger';
 
 export class ExpressWebSocketAdapter
     implements WebSocketAdapter {
@@ -26,7 +27,7 @@ export class ExpressWebSocketAdapter
 
     init(): void {
         if (this.io) {
-            console.warn('[Optima] WebSocket server is already initialized.');
+            Logger.debug('WebSocket server is already initialized.');
             return;
         }
 
@@ -46,7 +47,7 @@ export class ExpressWebSocketAdapter
                 },
             },
         );
-        console.log('[Optima] WebSocket server initialized successfully.');
+        Logger.debug('WebSocket server initialized successfully.');
 
         this.setupEvents();
     }
@@ -54,12 +55,12 @@ export class ExpressWebSocketAdapter
     private setupEvents(): void {
         if (!this.io) return;
 
-        console.log('[Optima] Setting up WebSocket event bindings.');
+        Logger.debug('Setting up WebSocket event bindings.');
 
         this.io.on(
             'connection',
             socket => {
-                console.log(`[Optima] New WebSocket connection: ${socket.id}`);
+                Logger.debug(`New WebSocket connection: ${socket.id}`);
 
                 this.setupClient(socket);
             },
@@ -122,7 +123,7 @@ export class ExpressWebSocketAdapter
         socket.on(
             'disconnect',
             () => {
-                console.log(`[Optima] WebSocket disconnected: ${socket.id}`);
+                Logger.debug(`WebSocket disconnected: ${socket.id}`);
             }
         );
     }

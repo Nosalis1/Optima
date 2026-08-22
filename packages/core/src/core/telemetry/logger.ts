@@ -51,9 +51,9 @@ class Logger {
         );
     }
 
-    static debug(message: string): void {
+    static debug(message: string, ...args: unknown[]): void {
         const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
-        console.log(`${Logger.DIM}[${timestamp}]${Logger.RESET} ${Logger.DIM}${message}${Logger.RESET}`);
+        console.log(`${Logger.DIM}[${timestamp}]${Logger.RESET} [Optima] ${Logger.DIM}${message}${Logger.RESET}`, ...args);
     }
 
     static duration(message: string, duration: number): void {

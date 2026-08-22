@@ -1,3 +1,4 @@
+import Logger from '../core/telemetry/logger';
 import { probability } from './utility';
 
 export const scenario = {
@@ -15,7 +16,7 @@ export function updateScenarios() {
     if (now > scenario.latencySpikeUntil && probability(0.002)) {
         scenario.trafficMultiplier = 3;
         scenario.latencySpikeUntil = now + 10000;
-        console.log("📈 Traffic spike started");
+        Logger.debug("Traffic spike started");
     }
 
     if (now > scenario.latencySpikeUntil) {
@@ -25,19 +26,19 @@ export function updateScenarios() {
     // database slowdown
     if (now > scenario.databaseSlowUntil && probability(0.001)) {
         scenario.databaseSlowUntil = now + 12000;
-        console.log("🐢 Database slowdown");
+        Logger.debug("Database slowdown");
     }
 
     // auth outage
     if (now > scenario.authDownUntil && probability(0.0005)) {
         scenario.authDownUntil = now + 8000;
-        console.log("🔐 Auth outage");
+        Logger.debug("Auth outage");
     }
 
     // memory leak
     if (!scenario.memoryLeak && probability(0.0002)) {
         scenario.memoryLeak = true;
-        console.log("🧠 Memory leak started");
+        Logger.debug("Memory leak started");
     }
 }
 
@@ -61,22 +62,22 @@ export class ScenarioController {
             case "TRAFFIC_SPIKE":
                 this.state.trafficMultiplier = 4;
                 this.state.latencySpikeUntil = now + 30000;
-                console.log("Manual traffic spike!");
+                Logger.debug("Manual traffic spike!");
                 break;
 
             case "DATABASE_SLOWDOWN":
                 this.state.databaseSlowUntil = now + 60000;
-                console.log("Manual database slowdown!");
+                Logger.debug("Manual database slowdown!");
                 break;
 
             case "AUTH_OUTAGE":
                 this.state.authDownUntil = now + 30000;
-                console.log("Manual auth outage!");
+                Logger.debug("Manual auth outage!");
                 break;
 
             case "MEMORY_LEAK":
                 this.state.memoryLeak = true;
-                console.log("Manual memory leak!");
+                Logger.debug("Manual memory leak!");
                 break;
 
             case "RESET":
@@ -112,6 +113,6 @@ export class ScenarioController {
         this.state.authDownUntil = 0;
         this.state.latencySpikeUntil = 0;
         this.state.memoryLeak = false;
-        console.log("Scenarios reset!");
+        Logger.debug("Scenarios reset!");
     }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@optima-apm/dashboard",
+  "name": "apm-optima-dashboard",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@optima-apm/core": "*",
+    "apm-optima": "*",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",

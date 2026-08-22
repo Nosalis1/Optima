@@ -5,7 +5,7 @@
         "dev": "tsx watch src/main.ts"
     },
     "dependencies": {
-        "@optima-apm/core": "*",
+        "apm-optima": "*",
         "express": "^4.19.2"
     },
     "devDependencies": {

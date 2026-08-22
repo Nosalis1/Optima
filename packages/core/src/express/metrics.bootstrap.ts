@@ -17,6 +17,7 @@ import {
     correlationService
 } from '../core/telemetry/correlation.service';
 import { getConfig } from '../config';
+import Logger from '../core/telemetry/logger';
 
 export function expressMetricsBootstrap(server: HTTPServer) {
     const config = getConfig();
@@ -50,7 +51,7 @@ export function expressMetricsBootstrap(server: HTTPServer) {
         correlationService.tick();
     }, config.tickIntervalMs);
 
-    console.log('[Optima] Uspešno inicijalizovani svi podsistemi monitoringa.');
+    Logger.debug('Metrics bootstrap initialized successfully.');
 
     return () => {
         simulator?.stop();
