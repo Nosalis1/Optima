@@ -1,13 +1,13 @@
-import type {
-    Request,
-    Response
-} from 'express';
-import type {
-    HttpAdapter
-} from '../adapters/http.adapter';
+import type { Request, Response } from 'express';
+import type { HttpAdapter } from '../adapters/http.adapter';
 
-export class ExpressAdapter
-    implements HttpAdapter<Request, Response> {
+export class ExpressAdapter implements HttpAdapter<Request, Response> {
+    private getEndpoint(request: Request): string {
+        const route = request.route?.path;
+        if (!route) return request.path;
+        const baseUrl = request.baseUrl ?? '';
+        return `${baseUrl}${route}`;
+    }
     getRequest(request: Request) {
         const {
             body, // Parsed JSON or form data
@@ -21,21 +21,18 @@ export class ExpressAdapter
             secure, // Boolean for TLS connection status
             url, // Full requested URL string
         } = request;
-
         return {
             method,
-            endpoint: path,
+            endpoint: this.getEndpoint(request),
             clientIp: ip,
         };
     }
-
     getResponse(response: Response) {
         const {
             locals, // Request-scoped middleware variables
             headersSent, // Boolean tracking sent HTTP headers
             statusCode, // Current HTTP status code
         } = response;
-
         return { statusCode };
     }
 }

@@ -16,8 +16,7 @@ import {
 import { ConfigManager } from '../config';
 import Logger from '../core/telemetry/logger';
 
-export class ExpressWebSocketAdapter
-    implements WebSocketAdapter {
+export class ExpressWebSocketAdapter implements WebSocketAdapter {
     private io?: SocketIOServer;
 
     constructor(
