@@ -8,13 +8,20 @@ import type {
     AnalyticsData,
     DashboardData,
     HealthData,
+    SessionMetadata,
+    SessionSummary,
     SystemStaticInfo,
     SystemStatus,
 } from '../domain';
-import { mockDashboardData, mockAnalyticsData, mockHealthData } from '../components/utility/mocking';
+import { mockDashboardData, mockAnalyticsData, mockHealthData, mockSessionData, mockSessionSummary } from '../components/utility/mocking';
 
 const MetricsContext = React.createContext<{
     data: MetricsData;
+    sessions: SessionMetadata[];
+    selectedSession: number | null;
+    selectedSessionSummary: SessionSummary | null;
+    selectSession: (sessionNumber: number | null) => void;
+    downloadSession: (sessionNumber: number) => Promise<void>;
 } | null>(null);
 
 export type MetricsData = {
@@ -54,6 +61,9 @@ export function MetricsProvider({
         method: 'ALL',
         status: 'ALL'
     });
+    const [sessions, setSessions] = React.useState<SessionMetadata[]>(mockSessionData());
+    const [selectedSession, setSelectedSession] = React.useState<number | null>(null);
+    const [selectedSessionSummary, setSelectedSessionSummary] = React.useState<SessionSummary | null>(null);
 
     React.useEffect(() => {
         if (!isConnected) {
@@ -62,6 +72,17 @@ export function MetricsProvider({
         }
 
         try {
+            registerEventListener(WebSocketEvents.RESPONSE_SESSION_METADATA, sessionMetadata => {
+                console.log("Received session metadata:", sessionMetadata);
+                setSessions(sessionMetadata.sessionHistory);
+                setSelectedSession(null);
+                setSelectedSessionSummary(null);
+            });
+            registerEventListener(WebSocketEvents.RESPONSE_SESSION_SUMMARY, sessionSummary => {
+                console.log("Received session summary:", sessionSummary);
+                setSelectedSessionSummary(sessionSummary);
+                setSelectedSession(sessionSummary.sessionNumber);
+            });
             registerEventListener(WebSocketEvents.RESPONSE_SYSTEM_DATA, systemData => {
                 setData(prev => ({
                     ...prev,
@@ -91,11 +112,35 @@ export function MetricsProvider({
             emit(WebSocketEvents.REQUEST_DASHBOARD_DATA, null);
             emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, filters);
             emit(WebSocketEvents.REQUEST_HEALTH_DATA, null);
+            emit(WebSocketEvents.REQUEST_SESSION_METADATA, null);
         } catch (error) {
             console.error("Error fetching system status:", error);
         }
 
     }, [isConnected]);
+
+    function selectSession(sessionNumber: number | null) {
+        if (sessionNumber === null) {
+            setSelectedSessionSummary(null);
+            setSelectedSession(sessionNumber);
+            return;
+        }
+
+        emit(WebSocketEvents.REQUEST_SESSION_SUMMARY, { sessionNumber });
+    }
+
+    async function downloadSession(sessionNumber: number) {
+        const response = await fetch(``);
+        if (!response.ok) throw new Error(`Failed to download session ${sessionNumber}: ${response.statusText}`);
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `session-${sessionNumber}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
 
     function cleanup() {
 
@@ -103,7 +148,12 @@ export function MetricsProvider({
 
     return (
         <MetricsContext.Provider value={{
-            data
+            data,
+            sessions,
+            selectedSession,
+            selectedSessionSummary,
+            selectSession,
+            downloadSession
         }}>
             {children}
         </MetricsContext.Provider>

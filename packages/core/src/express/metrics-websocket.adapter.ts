@@ -11,6 +11,7 @@ import type {
 } from '../adapters/websocket.adapter';
 import {
     type MetricsDataProvider,
+    type SessionDataProvider,
     WebSocketEvents
 } from '../core/delivery';
 import { ConfigManager } from '../config';
@@ -21,7 +22,8 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
 
     constructor(
         private readonly server: HTTPServer,
-        private readonly provider: MetricsDataProvider
+        private readonly provider: MetricsDataProvider,
+        private readonly sessionProvider: SessionDataProvider
     ) { }
 
     init(): void {
@@ -72,6 +74,27 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
     private setupClient(
         socket: Socket
     ): void {
+
+        socket.on(
+            WebSocketEvents.REQUEST_SESSION_METADATA,
+            async () => {
+                socket.emit(
+                    WebSocketEvents.RESPONSE_SESSION_METADATA,
+                    await this.sessionProvider.getSessionManifest()
+                )
+            }
+        );
+
+        socket.on(
+            WebSocketEvents.REQUEST_SESSION_SUMMARY,
+            async ({ sessionNumber }) => {
+                socket.emit(
+                    WebSocketEvents.RESPONSE_SESSION_SUMMARY,
+                    await this.sessionProvider.getSessionSummary(sessionNumber)
+                )
+            }
+        );
+
         socket.on(
             WebSocketEvents.REQUEST_CONFIGURATION,
             () => {
@@ -80,7 +103,7 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
                     ConfigManager.getInstance().get()
                 )
             }
-        )
+        );
 
         socket.on(
             WebSocketEvents.REQUEST_SYSTEM_DATA,
@@ -128,6 +151,8 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
                 Logger.debug(`WebSocket disconnected: ${socket.id}`);
             }
         );
+
+        socket.emit(WebSocketEvents.RESPONSE_SESSION_METADATA, this.sessionProvider.getSessionManifest());
     }
 
     broadcast(

@@ -2,6 +2,8 @@ import type {
     AnalyticsData,
     DashboardData,
     HealthData,
+    SessionMetadata,
+    SessionSummary,
 } from '../../domain';
 
 const mock = (min: number, max: number): number => {
@@ -264,5 +266,65 @@ export function mockHealthData(): HealthData {
                 rssMemory: mockArray(ARRAY_LENGTH, 0, 1000),
             }
         }
+    }
+}
+
+export function mockSessionData(): SessionMetadata[] {
+    return [
+        { sessionNumber: 1, recoveredFromCrash: false, startedAt: "2024-06-01 10:00:00", endedAt: "2024-06-01 10:30:00" },
+        { sessionNumber: 2, recoveredFromCrash: true, startedAt: "2024-06-02 11:00:00", endedAt: null },
+        { sessionNumber: 3, recoveredFromCrash: false, startedAt: "2024-06-03 12:00:00", endedAt: null },
+        { sessionNumber: 4, recoveredFromCrash: false, startedAt: "2024-06-04 13:00:00", endedAt: null },
+        { sessionNumber: 5, recoveredFromCrash: true, startedAt: "2024-06-05 14:00:00", endedAt: null },
+        { sessionNumber: 6, recoveredFromCrash: false, startedAt: "2024-06-06 15:00:00", endedAt: null },
+        { sessionNumber: 7, recoveredFromCrash: false, startedAt: "2024-06-07 16:00:00", endedAt: "2024-06-07 17:00:00" },
+        { sessionNumber: 8, recoveredFromCrash: true, startedAt: "2024-06-08 17:00:00", endedAt: null },
+        { sessionNumber: 9, recoveredFromCrash: false, startedAt: "2024-06-09 18:00:00", endedAt: null },
+        { sessionNumber: 10, recoveredFromCrash: false, startedAt: "2024-06-10 19:00:00", endedAt: null }
+    ];
+}
+
+export function mockSessionSummary(sessionNumber: number): SessionSummary {
+    function generateDummyHours(count: number): SessionSummary["perHour"] {
+        const hours: SessionSummary["perHour"] = [];
+        const now = new Date();
+        for (let i = 0; i < count; i++) {
+            const hourStart = new Date(now.getTime() - i * 60 * 60 * 1000);
+            const clientErrorCount = Math.floor(Math.random() * 10);
+            const serverErrorCount = Math.floor(Math.random() * 5);
+            const min = Math.max(clientErrorCount, serverErrorCount) + 1;
+            const avgRps = min + Math.floor(Math.random() * 100);
+            const latency = Math.random() * 220;
+            const ec = Math.floor(Math.random() * 10);
+            hours.push({
+                hourStart: hourStart.toISOString(),
+                clientErrorCount: clientErrorCount,
+                serverErrorCount: serverErrorCount,
+                avgRps: avgRps,
+                maxRps: avgRps + Math.floor(Math.random() * 50),
+                avgLatency: latency,
+                maxLatency: latency + Math.random() * 250,
+                healthyEndpointCount: ec + Math.floor(Math.random() * 10),
+                slowEndpointCount: ec + Math.floor(Math.random() * 5),
+                sampleCount: Math.floor(Math.random() * 1000)
+            });
+        }
+        return hours;
+    }
+
+    return {
+        sessionNumber: sessionNumber,
+        startedAt: new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString(),
+        endedAt: new Date().toISOString(),
+        windowStart: new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString(),
+        windowEnd: new Date().toISOString(),
+        clientErrorCount: 214,
+        serverErrorCount: 164,
+        avgRps: 110,
+        maxRps: 220,
+        avgLatency: 250,
+        maxLatency: 500,
+        sampleCount: 10000,
+        perHour: generateDummyHours(24)
     }
 }

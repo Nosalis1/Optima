@@ -13,6 +13,7 @@ import type { WebSocketAdapter } from '../adapters/websocket.adapter';
 
 import { WebSocketEvents } from '../core/delivery';
 import { collectorService } from '../core/telemetry/collector.service';
+import { persistence } from '../core/storage';
 import Logger from '../core/telemetry/logger';
 
 @WebSocketGateway({
@@ -33,12 +34,17 @@ export class NestWebSocketAdapter
 
     init(): void { }
 
-    handleConnection(
+    async handleConnection(
         socket: Socket,
-    ): void {
+    ): Promise<void> {
         Logger.debug(
             'Dashboard client connected.',
             socket.id,
+        );
+
+        socket.emit(
+            WebSocketEvents.RESPONSE_SESSION_METADATA,
+            await persistence.getSessionManifest(),
         );
     }
 
@@ -48,6 +54,35 @@ export class NestWebSocketAdapter
         Logger.debug(
             'Dashboard client disconnected.',
             socket.id,
+        );
+    }
+
+    @SubscribeMessage(
+        WebSocketEvents.REQUEST_SESSION_METADATA,
+    )
+    handleSessionMetadata(
+        @ConnectedSocket() socket: Socket,
+    ): void {
+        socket.emit(
+            WebSocketEvents.RESPONSE_SESSION_METADATA,
+            persistence.getSessionManifest(),
+        );
+    }
+
+    @SubscribeMessage(
+        WebSocketEvents.REQUEST_SESSION_SUMMARY,
+    )
+    async handleSessionSummary(
+        @ConnectedSocket() socket: Socket,
+        payload: { sessionNumber: number },
+    ): Promise<void> {
+        const { sessionNumber } = payload;
+
+        const summary = await persistence.getSessionSummary(sessionNumber);
+
+        socket.emit(
+            WebSocketEvents.RESPONSE_SESSION_SUMMARY,
+            summary,
         );
     }
 

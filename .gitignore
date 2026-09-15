@@ -20,6 +20,7 @@ apps/dashboard/out/
 
 # Statically exported dashboard inside core package
 packages/core/src/dashboard/out/
+packages/core/dashboard-out/
 packages/core/dist/
 
 # Environment Variables & Local Secrets

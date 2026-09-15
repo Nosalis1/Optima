@@ -7,6 +7,7 @@ import {
 import { expressMetricsMiddleware } from './metrics.middleware';
 import { attachDashboard } from './metrics.dashboard';
 import { expressMetricsBootstrap } from './metrics.bootstrap';
+import { persistence } from '../core/storage';
 import Logger from '../core/telemetry/logger';
 
 export function setupOptima(
@@ -25,7 +26,7 @@ export function setupOptima(
 
     // Attaching the dashboard on provided path
     if (config.dashboardPath !== false) {
-        attachDashboard(app, config.dashboardPath);
+        attachDashboard(app, config.dashboardPath, persistence);
 
         Logger.debug(`Dashboard has been attached at path: ${config.dashboardPath}`);
     } else {

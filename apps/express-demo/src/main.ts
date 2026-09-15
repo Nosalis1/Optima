@@ -68,10 +68,10 @@ function shutdown() {
     });
 }
 
-setTimeout(() => {
-    console.log('Simulation time completed. Shutting down...');
-    shutdown();
-}, workTime);
+// setTimeout(() => {
+//     console.log('Simulation time completed. Shutting down...');
+//     shutdown();
+// }, workTime);
 
 process.on("uncaughtException", err => console.error(err))
 

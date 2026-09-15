@@ -21,6 +21,8 @@ type Props = {
     defaultColor?: string;
     defaultType?: "solid" | "dashed";
     withDots?: boolean;
+    rows?: number; // Optional: number of rows for the grid
+    cols?: number; // Optional: number of columns for the grid
 }
 
 export default function LineGraph({
@@ -28,7 +30,9 @@ export default function LineGraph({
     padding = DEFAULT_PADDING,
     defaultColor = "#3b82f6",
     defaultType = 'solid',
-    withDots = true
+    withDots = true,
+    rows = 4,
+    cols = 5
 }: Props) {
     const { width: chartWidth, height: chartHeight, isHydrated } = useSize();
 
@@ -55,10 +59,10 @@ export default function LineGraph({
         [] as Point[]
     );
     // const xAxisLabels = longestSeries.map((p) => p.x.toString());
-    const colCount = data[0].points.length / 5 + 1;
-    const xAxisLabels = Array.from({ length: colCount }, (_, idx) => `${idx * 5}`);
+    const colCount = data[0].points.length / cols + 1;
+    const xAxisLabels = Array.from({ length: colCount }, (_, idx) => `${idx * cols}`);
 
-    const rowCount = 4;
+    const rowCount = rows;
     const yAxisLabels = Array.from({ length: rowCount + 1 }, (_, i) => {
         const value = minY + (i / rowCount) * yRange;
         return Number.isInteger(value) ? value.toString() : value.toFixed(1);

@@ -1,5 +1,6 @@
 "use client";
 import {
+    ArchiveIcon,
     ChalkBoardIcon,
     FileChartBarIcon,
     LifeSaverIcon,
@@ -17,6 +18,7 @@ const Sidebar = () => {
         { name: "Dashboard", path: "/", icon: ChalkBoardIcon },
         { name: "Route Analytics", path: "/analytics", icon: FileChartBarIcon },
         { name: "System Health", path: "/health", icon: LifeSaverIcon },
+        { name: "Sessions", path: "/sessions", icon: ArchiveIcon },
     ];
 
     const navigate = (path: string) => {

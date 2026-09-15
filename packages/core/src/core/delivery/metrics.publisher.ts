@@ -6,6 +6,9 @@ import type {
     AnalyticsData,
     DashboardData,
     HealthData,
+    SessionMetadata,
+    SessionManifest,
+    SessionSummary,
 } from "../domain";
 import {
     WebSocketEvents
@@ -18,46 +21,59 @@ export interface MetricsDataProvider {
     getHealthData(): HealthData;
 }
 
+export interface SessionDataProvider {
+    getSessionMetadata(): SessionMetadata | null;
+    getSessionManifest(): Promise<SessionManifest>;
+    getSessionSummary(sessionNumber: number): Promise<SessionSummary | null>;
+}
+
 export class MetricsPublisher {
-    private interval?: NodeJS.Timeout;
+    private publishData: {
+        systemStaticInfo: SystemStaticInfo;
+        dashboardData: DashboardData;
+        analyticsData: AnalyticsData;
+        healthData: HealthData;
+    } | null = null;
 
     constructor(
         private readonly provider: MetricsDataProvider,
+        private readonly sessionProvider: SessionDataProvider,
         private readonly websocket: WebSocketAdapter,
-        private readonly intervalMs: number = 1000
     ) { }
 
-    start(): void {
-        if (this.interval) return;
+    publish(): void {
+        this.publishData = {
+            systemStaticInfo: this.provider.getSystemStaticInfo(),
+            dashboardData: this.provider.getDashboardData(),
+            analyticsData: this.provider.getAnalyticsData(),
+            healthData: this.provider.getHealthData(),
+        };
 
-        this.interval = setInterval(() => {
-            this.publish();
-        }, this.intervalMs);
-    }
-
-    stop(): void {
-        if (!this.interval) return;
-        clearInterval(this.interval);
-        this.interval = undefined;
-    }
-
-    private publish(): void {
         //? consider sending only the changed data instead of sending all data every time
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_SYSTEM_DATA,
-            this.provider.getSystemStaticInfo()
+            this.publishData.systemStaticInfo
         );
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_DASHBOARD_DATA,
-            this.provider.getDashboardData()
+            this.publishData.dashboardData
         );
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_ANALYTICS_DATA,
-            this.provider.getAnalyticsData()
+            this.publishData.analyticsData
         );
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_HEALTH_DATA,
-            this.provider.getHealthData()
+            this.publishData.healthData
         );
+    }
+
+    retrieveLastPublishedData(): {
+        systemStaticInfo: SystemStaticInfo;
+        dashboardData: DashboardData;
+        analyticsData: AnalyticsData;
+        healthData: HealthData;
+    } | null {
+        return this.publishData;
     }
 }

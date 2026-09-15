@@ -9,6 +9,8 @@ export class ConfigManager {
 
     private readonly defaultConfig: ReadonlyConfig =
         Object.freeze({
+            applicationVersion: '1.0.0',
+
             dashboardPath: '/optima-metrics',
 
             simulation: {
@@ -20,6 +22,11 @@ export class ConfigManager {
                 slowLatencyThresholdMs: 500,
                 eventLoopLagThresholdMs: 100,
                 eventLoopResolutionMs: 20,
+            },
+            persistence: {
+                baseDir: './metrics_data',
+                maxBufferSize: 1000,
+                persistRawRequests: true,
             },
             tickIntervalMs: 250,
             excludePaths: [
@@ -76,6 +83,10 @@ export class ConfigManager {
 
         const sanitized: Partial<ConfigOptions> = {};
 
+        if (options.applicationVersion !== undefined) {
+            sanitized.applicationVersion = String(options.applicationVersion);
+        }
+
         if (options.dashboardPath !== undefined) {
             if (options.dashboardPath === false) {
                 sanitized.dashboardPath = false;
@@ -104,6 +115,20 @@ export class ConfigManager {
                     ? Math.max(1, options.publisher.eventLoopResolutionMs)
                     : undefined,
             };
+        }
+
+        if (options.persistence !== undefined) {
+            if (typeof options.persistence === 'boolean') {
+                sanitized.persistence = options.persistence;
+            } else {
+                sanitized.persistence = {
+                    baseDir: String(options.persistence.baseDir),
+                    maxBufferSize: options.persistence.maxBufferSize !== undefined
+                        ? Math.max(1, options.persistence.maxBufferSize)
+                        : undefined,
+                    persistRawRequests: Boolean(options.persistence.persistRawRequests),
+                };
+            }
         }
 
         if (options.tickIntervalMs !== undefined) {

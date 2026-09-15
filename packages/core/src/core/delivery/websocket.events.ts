@@ -1,7 +1,13 @@
 export enum WebSocketEvents {
+    REQUEST_SESSION_METADATA = "request-session-metadata",
+    RESPONSE_SESSION_METADATA = "response-session-metadata",
+
+    REQUEST_SESSION_SUMMARY = "request-session-summary",
+    RESPONSE_SESSION_SUMMARY = "response-session-summary",
+
     REQUEST_CONFIGURATION = "request-configuration",
     RESPONSE_CONFIGURATION = "response-configuration",
-    
+
     REQUEST_SYSTEM_DATA = "request-system-data",
     RESPONSE_SYSTEM_DATA = "response-system-data",
 

@@ -2,8 +2,6 @@ import Header from "./header";
 import Sidebar from "./sidebar";
 import Footer from "./footer";
 
-//! Refactor all internal components
-
 const Screen = ({
     children
 }: { children: React.ReactNode }) => {

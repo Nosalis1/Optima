@@ -2,8 +2,9 @@
 import DashboardPage from "./sections/dashboard/index";
 import AnalyticsPage from "./sections/analytics/index";
 import HealthPage from "./sections/health/index";
-import { useGate } from "./context/gate.context";
+import SessionsPage from "./sections/sessions/index";
 import ConfigurationPage from "./sections/configuration";
+import { useGate } from "./context/gate.context";
 
 export default function Page() {
   const {
@@ -15,6 +16,7 @@ export default function Page() {
       {activeTab === "/" && <DashboardPage />}
       {activeTab === "/analytics" && <AnalyticsPage />}
       {activeTab === "/health" && <HealthPage />}
+      {activeTab === "/sessions" && <SessionsPage />}
       {activeTab === "/configuration" && <ConfigurationPage />}
     </>
   );

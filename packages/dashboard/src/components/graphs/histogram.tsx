@@ -10,6 +10,8 @@ type Props = {
     padding?: Padding;
     barColor?: string;
     label?: string; // Optional label for the histogram (used in legend)
+    rows?: number; // Optional number of rows for the grid (default is 5)
+    cols?: number; // Optional number of columns for the grid (default is binCount)
 };
 
 type Bin = {
@@ -23,7 +25,9 @@ export default function Histogram({
     binCount = 10,
     padding = DEFAULT_PADDING,
     barColor = "#3b82f6",
-    label = "Histogram"
+    label = "Histogram",
+    rows = 5,
+    cols = binCount,
 }: Props) {
     const { width: chartWidth, height: chartHeight, isHydrated } = useSize();
 
@@ -63,15 +67,16 @@ export default function Histogram({
     const maxY = maxCount === 0 ? 1 : maxCount;
 
     // --- 4. GRID LABELS ---
-    const rowCount = 5;
+    const rowCount = rows;
     const yAxisLabels = Array.from({ length: rowCount + 1 }, (_, i) => {
         const val = Math.round((i / rowCount) * maxY);
         return val.toString();
     });
 
     // X-axis labels mark the boundary values of the bins
-    const xAxisLabels = Array.from({ length: binCount + 1 }, (_, i) => {
-        const val = minX + i * binWidthValue;
+    const colCount = cols;
+    const xAxisLabels = Array.from({ length: colCount + 1 }, (_, i) => {
+        const val = i + 1;
         return Number.isInteger(val) ? val.toString() : val.toFixed(1);
     });
 

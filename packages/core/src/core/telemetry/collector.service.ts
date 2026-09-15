@@ -22,7 +22,7 @@ class CollectorService {
         private readonly eventLoopCollector: EventLoopCollector,
         private readonly gcCollector: GCCollector,
         private readonly handlesCollector: HandlesCollector,
-        private readonly runtimeCollector: RuntimeCollector
+        private readonly runtimeCollector: RuntimeCollector,
     ) { }
 
     getSystemStaticInfo(): SystemStaticInfo {
@@ -117,5 +117,5 @@ export const collectorService = new CollectorService(
     ),
     new GCCollector(),
     new HandlesCollector(),
-    new RuntimeCollector()
+    new RuntimeCollector(),
 );

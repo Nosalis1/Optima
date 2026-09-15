@@ -1,16 +1,12 @@
-import type {
-    TelemetryRequest,
-} from '../domain';
-import {
-    storage as localStorage,
-} from "../storage/local.repository";
+import type { TelemetryRequest } from '../domain';
+import { storage as localStorage } from "../storage/local.repository";
 import { getConfig } from '../../config';
 
 class TelemetryService {
     constructor(
         private readonly storage: {
             record(request: TelemetryRequest): void;
-        } = localStorage
+        } = localStorage,
     ) { }
 
     private isPathExcluded(endpoint: string): boolean {

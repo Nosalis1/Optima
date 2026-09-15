@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 
-export function useSize(id: string = "graph-root", defaultWidth: number = 40, defaultHeight: number = 40) {
+export function useSize(id: string = "graph-root", defaultWidth: number = 40, defaultHeight: number = 80) {
     const [dimensions, setDimensions] = React.useState({ width: defaultWidth, height: defaultHeight });
     const [isHydrated, setIsHydrated] = React.useState(false);
 

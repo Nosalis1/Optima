@@ -3,7 +3,7 @@ import React from "react";
 import Tooltip from "../utility/tooltip";
 import { QuestionMarkIcon } from '@/app/components/shared/icons';
 
-function CardFoldableHeader({ title, timestamp, isFolded, onToggle, tooltip }: { title: string, timestamp: string, isFolded: boolean, onToggle: () => void, tooltip?: string }) {
+export function CardFoldableHeader({ title, timestamp, isFolded, onToggle, tooltip }: { title: string, timestamp: string, isFolded: boolean, onToggle: () => void, tooltip?: string }) {
     return (
         <div className="flex items-center justify-between mb-1 cursor-pointer p-2 border-b-1 border-accent-soft" onClick={onToggle}>
             <h2 className="text-sm font-semibold text-accent">{title}</h2>

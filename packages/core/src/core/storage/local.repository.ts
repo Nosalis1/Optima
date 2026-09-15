@@ -1,9 +1,5 @@
-import type {
-    TelemetryRequest
-} from '../domain';
-import {
-    getConfig
-} from '../../config';
+import type { TelemetryRequest } from '../domain';
+import { getConfig } from '../../config';
 import {
     BucketStore,
     DashboardStore,
@@ -14,6 +10,8 @@ import {
     AlertStore,
     MetricsStore
 } from './stores';
+import { ApplicationEventManager } from '../organizers';
+import { persistence, PersistenceLayer } from './persistence.layer';
 
 class LocalRepository {
     // Standard Stores
@@ -29,6 +27,9 @@ class LocalRepository {
     readonly dashboard: DashboardStore;
     readonly analytics: AnalyticsStore;
     readonly system: SystemStore;
+
+    // Persistence
+    readonly persistence: PersistenceLayer = persistence;
 
     constructor() {
         const config = getConfig();
@@ -82,15 +83,26 @@ class LocalRepository {
         });
 
         if (status === 'ANOMALY') {
-            this.alerts.warning(
-                `Anomaly detected: ${request.method} ${request.endpoint} took ${request.responseTime}ms`
-            );
+            const reason = `Slow request: ${request.method} ${request.endpoint} took ${request.responseTime}ms`;
+            this.alerts.warning(`Anomaly detected: ${reason}`);
+            ApplicationEventManager.instance?.emit({
+                type: 'ANOMALY',
+                reason
+            });
         }
 
         this.bucket.recordRequest(
             request.method,
             request.endpoint
         );
+
+        this.persistence.onHttpRequest({
+            method: request.method,
+            path: request.endpoint,
+            statusCode: request.statusCode,
+            durationMs: request.responseTime,
+            timestamp: new Date(request.timestamp).toISOString()
+        });
     }
 
     tick(): void {
