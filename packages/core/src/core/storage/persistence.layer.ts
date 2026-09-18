@@ -8,7 +8,8 @@ import {
     archiveFile,
     writeJSONAtomic,
     readJSON,
-    readRecords
+    readRecords,
+    cleanupOrphanedTempFiles
 } from "../storage/utility/file-buffer";
 import type {
     AnalyticsData,
@@ -84,6 +85,8 @@ export class PersistenceLayer {
         });
     }
 
+    //#region Initialization
+
     private async readManifest(): Promise<SessionManifest> {
         try {
             const manifest = await readJSON<SessionManifest>(this.manifestPath);
@@ -94,41 +97,53 @@ export class PersistenceLayer {
     }
 
     private async initSession(): Promise<SessionMetadata> {
-        if (!this.enabled) {
+        try {
+            if (!this.enabled) {
+                return {
+                    sessionNumber: 0,
+                    recoveredFromCrash: false,
+                    startedAt: new Date().toISOString(),
+                    endedAt: null
+                };
+            }
+
+            const removed = await cleanupOrphanedTempFiles(this.baseDir);
+            if (removed > 0) {
+                Logger.debug(`PersistenceLayer: Removed ${removed} orphaned temporary files during initialization.`);
+            }
+
+            const manifest = await this.readManifest();
+            const recoveredFromCrash = manifest.lastStartedAt !== '' && manifest.lastShutdownAt === null;
+
+            const now = new Date().toISOString();
+            manifest.totalSessions += 1;
+            manifest.lastStartedAt = now;
+            manifest.lastShutdownAt = null; // currently running
+
+            await writeJSONAtomic(this.manifestPath, manifest);
+
             this.sessionMeta = {
-                sessionNumber: 0,
-                recoveredFromCrash: false,
-                startedAt: new Date().toISOString(),
+                sessionNumber: manifest.totalSessions,
+                recoveredFromCrash,
+                startedAt: now,
                 endedAt: null
             };
+
+            if (recoveredFromCrash) {
+                void ApplicationEventManager.instance?.emit({
+                    type: 'CRASH',
+                    reason: 'Application recovered from an unexpected shutdown',
+                });
+            }
+
             return this.sessionMeta;
+        } catch (err) {
+            Logger.error("Error during session initialization:", err);
+            throw err;
         }
-        const manifest = await this.readManifest();
-        const recoveredFromCrash = manifest.lastStartedAt !== '' && manifest.lastShutdownAt === null;
-
-        const now = new Date().toISOString();
-        manifest.totalSessions += 1;
-        manifest.lastStartedAt = now;
-        manifest.lastShutdownAt = null; // currently running
-
-        await writeJSONAtomic(this.manifestPath, manifest);
-
-        this.sessionMeta = {
-            sessionNumber: manifest.totalSessions,
-            recoveredFromCrash,
-            startedAt: now,
-            endedAt: null
-        };
-
-        if (recoveredFromCrash) {
-            ApplicationEventManager.instance?.emit({
-                type: 'CRASH',
-                reason: 'Application recovered from an unexpected shutdown',
-            });
-        }
-
-        return this.sessionMeta;
     }
+
+    //#endregion
 
     async getSessionManifest(): Promise<SessionManifest> {
         return await this.readManifest();
@@ -232,20 +247,40 @@ export class PersistenceLayer {
         }
     }
 
+    //#region Shutdown
+
     async shutdown(): Promise<void> {
         if (!this.enabled) return;
-        const manifest = await this.readManifest();
-        manifest.lastShutdownAt = new Date().toISOString();
-        manifest.sessionHistory.push({
-            sessionNumber: this.sessionMeta?.sessionNumber ?? 0,
-            recoveredFromCrash: this.sessionMeta?.recoveredFromCrash ?? false,
-            startedAt: this.sessionMeta?.startedAt ?? '',
-            endedAt: manifest.lastShutdownAt
-        });
-        await writeJSONAtomic(this.manifestPath, manifest);
 
-        await this.flushHttpBuffer();
+        Logger.debug('PersistenceLayer: Shutdown initiated. Flushing buffers and updating session manifest.');
+
+        try {
+            const manifest = await this.readManifest();
+            if (!Array.isArray(manifest.sessionHistory)) {
+                manifest.sessionHistory = [];
+            }
+            manifest.lastShutdownAt = new Date().toISOString();
+            manifest.sessionHistory.push({
+                sessionNumber: this.sessionMeta?.sessionNumber ?? 0,
+                recoveredFromCrash: this.sessionMeta?.recoveredFromCrash ?? false,
+                startedAt: this.sessionMeta?.startedAt ?? '',
+                endedAt: manifest.lastShutdownAt
+            });
+            await writeJSONAtomic(this.manifestPath, manifest);
+            await this.flushHttpBuffer();
+            Logger.debug('PersistenceLayer: Session manifest updated and HTTP buffer flushed.');
+
+            const removed = await cleanupOrphanedTempFiles(this.baseDir);
+            if (removed > 0) {
+                Logger.debug(`PersistenceLayer: Removed ${removed} orphaned temporary files during initialization.`);
+            }
+
+        } catch (err) {
+            Logger.error("Error during persistence shutdown:", err);
+        }
     }
+
+    //#endregion
 
     async archiveOldFiles(category: 'http_requests' | 'system_health'): Promise<void> {
         const dir = path.join(this.baseDir, category);

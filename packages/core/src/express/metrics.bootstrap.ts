@@ -50,13 +50,13 @@ export function expressMetricsBootstrap(server: HTTPServer) {
     intervalManager.startIntervals();
 
     Logger.debug('Metrics bootstrap initialized successfully.');
-    ApplicationEventManager.instance?.emit({
+    void ApplicationEventManager.instance?.emit({
         type: 'STARTUP',
         reason: 'Express metrics module initialized',
     });
 
-    return () => {
-        ApplicationEventManager.instance?.emit({
+    return async () => {
+        await ApplicationEventManager.instance?.emit({
             type: 'SHUTDOWN',
             reason: 'Express metrics module shutting down',
         });

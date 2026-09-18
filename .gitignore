@@ -69,3 +69,7 @@ Thumbs.db
 .turbo/
 .eslintcache
 .stylelintcache
+
+# Other
+metrics_data/
+test-results/

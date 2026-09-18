@@ -9,6 +9,11 @@ type Props = {
 };
 
 export function Lifeline({ sessions, selectedSessionNumber, onSessionClick }: Props) {
+
+    if (!sessions || typeof sessions !== 'object' || !Array.isArray(sessions) || sessions.length === 0) {
+        return null;
+    }
+    
     return (
         <Card
             padding

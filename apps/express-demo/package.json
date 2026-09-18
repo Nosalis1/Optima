@@ -2,7 +2,7 @@
     "name": "express-demo",
     "private": true,
     "scripts": {
-        "dev": "tsx watch src/main.ts"
+        "dev": "tsx watch --ignore 'metrics_data/**' --ignore 'test-results/**' src/main.ts"
     },
     "dependencies": {
         "apm-optima": "*",

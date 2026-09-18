@@ -61,14 +61,14 @@ export class MetricsBootstrapService
         this.intervalManager.startIntervals();
 
         Logger.debug('Nest metrics bootstrap initialized.');
-        ApplicationEventManager.instance?.emit({
+        void ApplicationEventManager.instance?.emit({
             type: 'STARTUP',
             reason: 'Nest metrics module initialized',
         });
     }
 
-    onApplicationShutdown(): void {
-        ApplicationEventManager.instance?.emit({
+    async onApplicationShutdown(): Promise<void> {
+        await ApplicationEventManager.instance?.emit({
             type: 'SHUTDOWN',
             reason: 'Nest metrics module shutting down',
         });

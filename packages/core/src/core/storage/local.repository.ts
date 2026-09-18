@@ -85,7 +85,7 @@ class LocalRepository {
         if (status === 'ANOMALY') {
             const reason = `Slow request: ${request.method} ${request.endpoint} took ${request.responseTime}ms`;
             this.alerts.warning(`Anomaly detected: ${reason}`);
-            ApplicationEventManager.instance?.emit({
+            void ApplicationEventManager.instance?.emit({
                 type: 'ANOMALY',
                 reason
             });

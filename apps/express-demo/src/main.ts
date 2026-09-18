@@ -17,12 +17,20 @@ app.use(express.json());
 
 const optima = setupOptima(app, {
     dashboardPath: '/optima-metrics',
-    simulation: false,
+    simulation: {
+        intervalMs: 1000,
+        requestsPerTick: 25,
+    },
     publisher: {
         intervalMs: 1000,
         slowLatencyThresholdMs: 500,
         eventLoopLagThresholdMs: 100,
         eventLoopResolutionMs: 20,
+    },
+    persistence: {
+        baseDir: 'metrics_data',
+        maxBufferSize: 1000,
+        persistRawRequests: true,
     },
     tickIntervalMs: 250,
     consoleLog: true,
@@ -55,10 +63,10 @@ const stopMetrics = optima.attachServer(server);
 
 const stopTestCase = testCaseService.start();
 
-function shutdown() {
+async function shutdown() {
     console.log('Shutting down gracefully...');
     stopTestCase();
-    stopMetrics();
+    await stopMetrics();
 
     testCaseService.compareTestRuns();
 

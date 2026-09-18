@@ -137,7 +137,7 @@ export async function readAllRecords<T = unknown>(filePath: string): Promise<Sto
 
 export async function writeNDJSONAtomic<T>(filePath: string, records: StoredRecord<T>[]): Promise<void> {
     const dir = path.dirname(filePath);
-    const tmpPath = path.join(dir, `.${path.basename(filePath)}.${process.pid}.tmp`);
+    const tmpPath = path.join(dir, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
     const content = records.map((r) => JSON.stringify(r)).join('\n') + (records.length ? '\n' : '');
     const handle = await fsp.open(tmpPath, 'w');
     try {
@@ -151,7 +151,7 @@ export async function writeNDJSONAtomic<T>(filePath: string, records: StoredReco
 
 export async function writeJSONAtomic<T>(filePath: string, data: unknown): Promise<void> {
     const dir = path.dirname(filePath);
-    const tmpPath = path.join(dir, `.${path.basename(filePath)}.${process.pid}.tmp`);
+    const tmpPath = path.join(dir, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
 
     await fsp.mkdir(dir, { recursive: true });
     const handle = await fsp.open(tmpPath, "w");
@@ -210,4 +210,28 @@ export async function archiveFile(filePath: string, deleteOriginal: boolean = fa
     }
 
     return gzPath;
+}
+
+export async function cleanupOrphanedTempFiles(baseDir: string): Promise<number> {
+    if (!fs.existsSync(baseDir)) {
+        Logger.debug(`Base directory does not exist: ${baseDir}`);
+        return 0;
+    }
+    const files = await fsp.readdir(baseDir);
+    let removedCount = 0;
+
+    for (const file of files) {
+        if (file.startsWith('.') && file.includes('.tmp')) {
+            const fullPath = path.join(baseDir, file);
+            try {
+                await fsp.unlink(fullPath);
+                removedCount++;
+                Logger.debug(`Removed orphaned temp file: ${fullPath}`);
+            } catch (err) {
+                Logger.error(`Failed to remove orphaned temp file: ${fullPath}`, err);
+            }
+        }
+    }
+
+    return removedCount;
 }

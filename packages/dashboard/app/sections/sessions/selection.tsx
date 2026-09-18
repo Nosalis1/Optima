@@ -103,14 +103,14 @@ export function Selection({ selected }: Props) {
                 <Hero>
                     <HeroHeader
                         title="Avg RPS"
-                        value={selected.avgRps.toString()}
+                        value={selected.avgRps.toFixed(2)}
                         tooltip="Average Requests Per Second during this session."
                     />
                 </Hero>
                 <Hero>
                     <HeroHeader
                         title="Max RPS"
-                        value={selected.maxRps.toString()}
+                        value={selected.maxRps.toFixed(2)}
                         tooltip="Maximum Requests Per Second during this session."
                     />
                 </Hero>

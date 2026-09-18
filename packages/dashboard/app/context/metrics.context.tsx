@@ -73,13 +73,11 @@ export function MetricsProvider({
 
         try {
             registerEventListener(WebSocketEvents.RESPONSE_SESSION_METADATA, sessionMetadata => {
-                console.log("Received session metadata:", sessionMetadata);
                 setSessions(sessionMetadata.sessionHistory);
                 setSelectedSession(null);
                 setSelectedSessionSummary(null);
             });
             registerEventListener(WebSocketEvents.RESPONSE_SESSION_SUMMARY, sessionSummary => {
-                console.log("Received session summary:", sessionSummary);
                 setSelectedSessionSummary(sessionSummary);
                 setSelectedSession(sessionSummary.sessionNumber);
             });
