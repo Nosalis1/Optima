@@ -146,10 +146,26 @@ export class PersistenceLayer {
     //#endregion
 
     async getSessionManifest(): Promise<SessionManifest> {
+        if (!this.enabled) {
+            return {
+                totalSessions: 0,
+                lastStartedAt: '',
+                lastShutdownAt: null,
+                sessionHistory: []
+            };
+        }
         return await this.readManifest();
     }
 
     getSessionMetadata(): SessionMetadata | null {
+        if (!this.enabled) {
+            return {
+                sessionNumber: 0,
+                recoveredFromCrash: false,
+                startedAt: new Date().toISOString(),
+                endedAt: null
+            };
+        }
         return this.sessionMeta;
     }
 
