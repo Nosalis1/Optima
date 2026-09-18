@@ -83,18 +83,25 @@ export class AppModule {}
 ## Configuration Options
 
 | Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
+| --- | --- | --- | --- |
+| `applicationVersion` | `string` | `v1.0.0` | Version of currently running application, used for tracking session instances. |
 | `dashboardPath` | `string \| false` | `/optima-metrics` | Route endpoint for serving the embedded UI (`false` to disable). |
 | `simulation` | `false \| { intervalMs: number, requestsPerTick: number }` | `false` | Generates synthetic traffic for local testing and load simulation. |
 | `publisher.intervalMs` | `number` | `1000` | Broadcast interval (in ms) for pushing telemetry updates over WebSockets. |
 | `publisher.slowLatencyThresholdMs` | `number` | `500` | Latency limit in milliseconds above which requests are flagged as slow. |
 | `publisher.eventLoopLagThresholdMs` | `number` | `50` | Event Loop delay threshold in milliseconds for triggering lag alerts. |
 | `publisher.eventLoopResolutionMs` | `number` | `10` | Sampling resolution interval for computing Event Loop delay. |
+| `persistence` | `false \| Object` | `false` | Persist metrics data to disk as NDJSON files for long-term storage and historical analysis. |
+| `persistence.baseDir` | `string` | `./metrics_data` | Root directory where persisted metrics, events, and the session manifest are written. |
+| `persistence.maxBufferSize` | `number` | `200` | Number of buffered HTTP error records held in memory before an async flush to disk is triggered. |
+| `persistence.persistRawRequests` | `boolean` | `false` | Whether to persist individual HTTP error records (4xx/5xx) to disk, in addition to aggregated system health snapshots. |
+| `persistence.archiveIntervalMs` | `number` | `24 * 60 * 60 * 1000` | Interval for archiving old persistence files to save up on memory allocation. |
 | `tickIntervalMs` | `number` | `250` | Resolution interval for recalculating internal metrics and buckets. |
 | `excludePaths` | `string[]` | `['/_next/*','/_next/**','*.map','/favicon.ico','/metrics_pack']` | Array of route patterns or paths to skip from metric collection (e.g., `/health`). |
 | `consoleLog` | `boolean` | `false` | Enables logging internal system events and alerts to `stdout`. |
 | `ringBufferSize` | `number` | `60` | Capacity of the internal ring buffer used for storing time-series data. |
 | `alertBufferSize` | `number` | `100` | Maximum capacity of the buffer holding recent alerts and detected anomalies. |
+
 
 ## License
 

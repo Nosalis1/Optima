@@ -27,6 +27,7 @@ export class ConfigManager {
                 baseDir: './metrics_data',
                 maxBufferSize: 1000,
                 persistRawRequests: true,
+                archiveIntervalMs: 24 * 60 * 60 * 1000, // Archive old metrics data every 24 hours
             },
             tickIntervalMs: 250,
             excludePaths: [
@@ -127,6 +128,9 @@ export class ConfigManager {
                         ? Math.max(1, options.persistence.maxBufferSize)
                         : undefined,
                     persistRawRequests: Boolean(options.persistence.persistRawRequests),
+                    archiveIntervalMs: options.persistence.archiveIntervalMs !== undefined
+                        ? Math.max(1, options.persistence.archiveIntervalMs)
+                        : undefined,
                 };
             }
         }

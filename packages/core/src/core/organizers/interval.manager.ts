@@ -16,7 +16,7 @@ export class IntervalManager {
         if (typeof config.persistence !== 'boolean') {
             this.startInterval(() => {
                 this.onPersistenceTick();
-            }, 24 * 60 * 60 * 1000); // Every 24 hours
+            }, config.persistence.archiveIntervalMs ?? 24 * 60 * 60 * 1000);
         }
 
         // Publisher Interval

@@ -17,6 +17,7 @@ export interface ConfigOptions {
         baseDir: string; // Base directory for storing metrics data
         maxBufferSize?: number; // Maximum size of the buffer for storing metrics data before flushing to disk
         persistRawRequests?: boolean; // Whether to persist raw request data to disk
+        archiveIntervalMs?: number; // Interval in milliseconds for archiving old metrics data
     };
     tickIntervalMs?: number; // Interval in milliseconds for the internal tick of the metrics system
     excludePaths?: string[]; // Array of paths to exclude from metrics collection
