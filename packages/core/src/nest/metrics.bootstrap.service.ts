@@ -52,11 +52,11 @@ export class MetricsBootstrapService
             this.websocket,
         );
 
-        this.intervalManager = new IntervalManager(
-            () => { collectorService.tick(); correlationService.tick(); },
-            () => { this.publisher?.publish(); persistence.onPublisherTick(this.publisher?.retrieveLastPublishedData() || null); },
-            () => { persistence.archiveAllCategories(); }
-        );
+        this.intervalManager = new IntervalManager({
+            tick: () => { collectorService.tick(); correlationService.tick(); },
+            publisher: () => { this.publisher?.publish(); persistence.onPublisherTick(this.publisher?.retrieveLastPublishedData() || null); },
+            persistence: () => { persistence.archiveAllCategories(); }
+        });
 
         this.intervalManager.startIntervals();
 

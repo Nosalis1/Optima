@@ -27,13 +27,15 @@ export interface SessionDataProvider {
     getSessionSummary(sessionNumber: number): Promise<SessionSummary | null>;
 }
 
+type MetricsPublishedData = {
+    systemStaticInfo: SystemStaticInfo;
+    dashboardData: DashboardData;
+    analyticsData: AnalyticsData;
+    healthData: HealthData;
+} | null;
+
 export class MetricsPublisher {
-    private publishData: {
-        systemStaticInfo: SystemStaticInfo;
-        dashboardData: DashboardData;
-        analyticsData: AnalyticsData;
-        healthData: HealthData;
-    } | null = null;
+    private publishData: MetricsPublishedData = null;
 
     constructor(
         private readonly provider: MetricsDataProvider,
@@ -68,12 +70,7 @@ export class MetricsPublisher {
         );
     }
 
-    retrieveLastPublishedData(): {
-        systemStaticInfo: SystemStaticInfo;
-        dashboardData: DashboardData;
-        analyticsData: AnalyticsData;
-        healthData: HealthData;
-    } | null {
+    retrieveLastPublishedData(): MetricsPublishedData {
         return this.publishData;
     }
 }

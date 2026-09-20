@@ -41,11 +41,11 @@ export function expressMetricsBootstrap(server: HTTPServer) {
         websocket
     );
 
-    const intervalManager = new IntervalManager(
-        () => { collectorService.tick(); correlationService.tick(); },
-        () => { publisher.publish(); persistence.onPublisherTick(publisher.retrieveLastPublishedData() || null); },
-        () => { persistence.archiveAllCategories(); }
-    );
+    const intervalManager = new IntervalManager({
+        tick: () => { collectorService.tick(); correlationService.tick(); },
+        publisher: () => { publisher.publish(); persistence.onPublisherTick(publisher.retrieveLastPublishedData() || null); },
+        persistence: () => { persistence.archiveAllCategories(); }
+    });
 
     intervalManager.startIntervals();
 

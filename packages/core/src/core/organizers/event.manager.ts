@@ -4,9 +4,10 @@ import Logger from '../telemetry/logger';
 
 type AppPartialEvent = Omit<ApplicationEvent, 'timestamp' | 'applicationVersion'>;
 type AsyncListener = (event: ApplicationEvent) => void | Promise<void>;
+type ApplicationEventManagerInstance = Omit<ApplicationEventManager, 'start' | 'stop'>;
 
 export class ApplicationEventManager {
-    static instance: Omit<ApplicationEventManager, 'start' | 'stop'> | null = null;
+    static instance: ApplicationEventManagerInstance | null = null;
     private listeners: Array<AsyncListener> = [];
 
     constructor(

@@ -41,7 +41,7 @@ export class ConfigManager {
                 '/health',
                 '/optima-metrics/**',
                 '/optima-metrics/*',
-            ], //! OPTIMIZE THIS
+            ],
 
             consoleLog: true,
 

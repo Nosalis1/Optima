@@ -33,7 +33,7 @@ export function attachDashboard(
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename="session-${sessionNumber}-full.json"`);
 
-        await persistence.streamSessionExport(Number(sessionNumber), res);
+        await persistence.streamSessionExport(res, Number(sessionNumber));
         res.end();
     });
 

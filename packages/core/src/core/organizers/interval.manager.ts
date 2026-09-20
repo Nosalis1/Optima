@@ -1,50 +1,55 @@
 import { getConfig } from "../../config";
 
+interface TickCallback { (): void; }
+interface TickCallbackAsync { (): Promise<void>; }
+
+interface Interval { id: NodeJS.Timeout | null; callback: TickCallback | TickCallbackAsync | null; intervalMs: number; }
+
+type IntervalType = 'tick' | 'publisher' | 'persistence';
+
 export class IntervalManager {
-    private intervals: NodeJS.Timeout[] = [];
+    private intervals: Record<IntervalType, Interval | null> = { tick: null, publisher: null, persistence: null, };
 
-    constructor(
-        private onTick: () => void,
-        private onPublisherTick: () => void = () => { },
-        private onPersistenceTick: () => void = () => { },
-    ) { }
-
-    startIntervals() {
+    constructor(callbacks: Record<IntervalType, TickCallback | TickCallbackAsync | null>) {
         const config = getConfig();
 
-        // Persistence Interval
-        if (typeof config.persistence !== 'boolean') {
-            this.startInterval(() => {
-                this.onPersistenceTick();
-            }, config.persistence.archiveIntervalMs ?? 24 * 60 * 60 * 1000);
+        this.intervals.tick = callbacks.tick ? {
+            id: null,
+            callback: callbacks.tick,
+            intervalMs: config.tickIntervalMs,
+        } : null;
+
+        this.intervals.publisher = callbacks.publisher ? {
+            id: null,
+            callback: callbacks.publisher,
+            intervalMs: config.publisher.intervalMs,
+        } : null;
+
+        if (config.persistence !== false) {
+            this.intervals.persistence = callbacks.persistence ? {
+                id: null,
+                callback: callbacks.persistence,
+                intervalMs: config.persistence.archiveIntervalMs ?? 24 * 60 * 60 * 1000,
+            } : null;
         }
+    }
 
-        // Publisher Interval
-        this.startInterval(() => {
-            this.onPublisherTick();
-        }, config.publisher.intervalMs);
-
-        // Tick Interval
-        this.startInterval(() => {
-            this.onTick();
-        }, config.tickIntervalMs);
+    startIntervals() {
+        for (const intervalType in this.intervals) {
+            const interval = this.intervals[intervalType as IntervalType];
+            if (interval && interval.callback) {
+                interval.id = setInterval(interval.callback, interval.intervalMs);
+            }
+        }
     }
 
     stopIntervals() {
-        for (const interval of this.intervals) {
-            this.stopInterval(interval);
+        for (const intervalType in this.intervals) {
+            const interval = this.intervals[intervalType as IntervalType];
+            if (interval && interval.id) {
+                clearInterval(interval.id);
+                interval.id = null;
+            }
         }
-        this.intervals = [];
-    }
-
-    private startInterval(callback: () => void, intervalMs: number): NodeJS.Timeout {
-        const interval = setInterval(callback, intervalMs);
-        this.intervals.push(interval);
-        return interval;
-    }
-
-    private stopInterval(interval: NodeJS.Timeout): void {
-        clearInterval(interval);
-        this.intervals = this.intervals.filter(i => i !== interval);
     }
 }
