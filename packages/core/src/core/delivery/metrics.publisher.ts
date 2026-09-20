@@ -9,6 +9,7 @@ import type {
     SessionMetadata,
     SessionManifest,
     SessionSummary,
+    AnalyticsFilterSettings,
 } from "../domain";
 import {
     WebSocketEvents
@@ -17,7 +18,7 @@ import {
 export interface MetricsDataProvider {
     getSystemStaticInfo(): SystemStaticInfo;
     getDashboardData(): DashboardData;
-    getAnalyticsData(): AnalyticsData;
+    getAnalyticsData(filters?: AnalyticsFilterSettings): AnalyticsData;
     getHealthData(): HealthData;
 }
 

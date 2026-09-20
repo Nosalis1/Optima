@@ -15,6 +15,7 @@ import { WebSocketEvents } from '../core/delivery';
 import { collectorService } from '../core/telemetry/collector.service';
 import { persistence } from '../core/storage';
 import Logger from '../core/telemetry/logger';
+import type { AnalyticsFilterSettings } from '../core/domain';
 
 @WebSocketGateway({
     transports: ['websocket'],
@@ -115,10 +116,11 @@ export class NestWebSocketAdapter
     )
     handleAnalyticsData(
         @ConnectedSocket() socket: Socket,
+        payload: { filters: AnalyticsFilterSettings },
     ): void {
         socket.emit(
             WebSocketEvents.RESPONSE_ANALYTICS_DATA,
-            collectorService.getAnalyticsData(),
+            collectorService.getAnalyticsData(payload.filters),
         );
     }
 

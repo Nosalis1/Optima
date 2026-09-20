@@ -3,6 +3,7 @@ import type {
     AnalyticsData,
     DashboardData,
     HealthData,
+    AnalyticsFilterSettings,
 } from '../domain';
 import { storage } from "../storage";
 import {
@@ -33,8 +34,8 @@ class CollectorService {
         return storage.dashboard.get();
     }
 
-    getAnalyticsData(): AnalyticsData {
-        return storage.analytics.get();
+    getAnalyticsData(filters?: AnalyticsFilterSettings): AnalyticsData {
+        return storage.analytics.get(filters?.page || 1, 5, filters);
     }
 
     getHealthData(): HealthData {

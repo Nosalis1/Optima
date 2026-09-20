@@ -69,6 +69,20 @@ export interface DashboardData {
 }
 
 /**
+ * Represents the analytics filter settings used for filtering analytics data based on query, HTTP method, and status code.
+ * @property {string} query - The search query string for filtering analytics data.
+ * @property {'ALL' | 'GET' | 'POST' | 'PUT' | 'DELETE'} method - The HTTP method filter for analytics data.
+ * @property {'ALL' | '2xx' | '4xx' | '5xx'} status - The HTTP status code filter for analytics data.
+ * @property {number} page - The page number for paginated analytics data.
+ */
+export interface AnalyticsFilterSettings {
+    query: string;
+    method: 'ALL' | 'GET' | 'POST' | 'PUT' | 'DELETE';
+    status: 'ALL' | '2xx' | '4xx' | '5xx';
+    page: number;
+}
+
+/**
  * Represents the analytics data structure, including summary statistics, latency distribution, request volume, and a paginated table of endpoint telemetry data.
  * @property {object} summary - Summary statistics for the analytics data.
  * @property {number} summary.totalEndpoints - Total number of endpoints analyzed.

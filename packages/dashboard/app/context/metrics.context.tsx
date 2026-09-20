@@ -17,6 +17,8 @@ import { mockDashboardData, mockAnalyticsData, mockHealthData, mockSessionData, 
 
 const MetricsContext = React.createContext<{
     data: MetricsData;
+    analyticsFilterSettings: AnalyticsFilterSettings;
+    updateAnalyticsFilters: (newFilters: Partial<AnalyticsFilterSettings>) => void;
     sessions: SessionMetadata[];
     selectedSession: number | null;
     selectedSessionSummary: SessionSummary | null;
@@ -33,8 +35,10 @@ export type MetricsData = {
 }
 
 export type AnalyticsFilterSettings = {
+    query: string;
     method: 'ALL' | 'GET' | 'POST' | 'PUT' | 'DELETE';
     status: 'ALL' | '2xx' | '4xx' | '5xx';
+    page: number;
 };
 
 export function MetricsProvider({
@@ -58,12 +62,19 @@ export function MetricsProvider({
         health: mockHealthData(),
     });
     const [filters, setFilters] = React.useState<AnalyticsFilterSettings>({
+        query: '',
         method: 'ALL',
-        status: 'ALL'
+        status: 'ALL',
+        page: 1
     });
+    const filtersRef = React.useRef(filters);
     const [sessions, setSessions] = React.useState<SessionMetadata[]>(mockSessionData());
     const [selectedSession, setSelectedSession] = React.useState<number | null>(null);
     const [selectedSessionSummary, setSelectedSessionSummary] = React.useState<SessionSummary | null>(null);
+
+    function haveFilters(f: AnalyticsFilterSettings): boolean {
+        return f.query !== '' || f.method !== 'ALL' || f.status !== 'ALL' || f.page !== 1;
+    }
 
     React.useEffect(() => {
         if (!isConnected) {
@@ -94,6 +105,19 @@ export function MetricsProvider({
                 }));
             });
             registerEventListener(WebSocketEvents.RESPONSE_ANALYTICS_DATA, analyticsData => {
+                if (haveFilters(filtersRef.current)) {
+                    console.log("Received analytics data but filters are active.");
+                    emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, filtersRef.current);
+                } else {
+                    console.log("Received analytics data.");
+                    setData(prev => ({
+                        ...prev,
+                        analytics: analyticsData
+                    }));
+                }
+            });
+            registerEventListener(WebSocketEvents.RESPONSE_FILTERED_ANALYTICS_DATA, analyticsData => {
+                console.log("Received filtered analytics data:", analyticsData);
                 setData(prev => ({
                     ...prev,
                     analytics: analyticsData
@@ -108,7 +132,7 @@ export function MetricsProvider({
 
             emit(WebSocketEvents.REQUEST_SYSTEM_DATA, null);
             emit(WebSocketEvents.REQUEST_DASHBOARD_DATA, null);
-            emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, filters);
+            emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, null);
             emit(WebSocketEvents.REQUEST_HEALTH_DATA, null);
             emit(WebSocketEvents.REQUEST_SESSION_METADATA, null);
         } catch (error) {
@@ -116,6 +140,10 @@ export function MetricsProvider({
         }
 
     }, [isConnected]);
+
+    React.useEffect(() => {
+        filtersRef.current = filters;
+    }, [filters]);
 
     function selectSession(sessionNumber: number | null) {
         if (sessionNumber === null) {
@@ -141,6 +169,15 @@ export function MetricsProvider({
         URL.revokeObjectURL(url);
     }
 
+    function updateAnalyticsFilters(newFilters: Partial<AnalyticsFilterSettings>) {
+        console.log("Updating analytics filters:", newFilters);
+        setFilters(prev => {
+            const updatedFilters = { ...prev, ...newFilters };
+            emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, updatedFilters);
+            return updatedFilters;
+        });
+    }
+
     function cleanup() {
 
     }
@@ -148,9 +185,11 @@ export function MetricsProvider({
     return (
         <MetricsContext.Provider value={{
             data,
+            analyticsFilterSettings: filters,
             sessions,
             selectedSession,
             selectedSessionSummary,
+            updateAnalyticsFilters,
             selectSession,
             downloadSession
         }}>

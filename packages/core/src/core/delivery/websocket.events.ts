@@ -16,6 +16,7 @@ export enum WebSocketEvents {
 
     REQUEST_ANALYTICS_DATA = "request-analytics-data",
     RESPONSE_ANALYTICS_DATA = "response-analytics-data",
+    RESPONSE_FILTERED_ANALYTICS_DATA = "response-filtered-analytics-data",
 
     REQUEST_HEALTH_DATA = "request-health-data",
     RESPONSE_HEALTH_DATA = "response-health-data",

@@ -21,6 +21,7 @@ export default function ConfigurationPage() {
                 <HeroContent
                     variant="default"
                     values={{
+                        applicationVersion: str(configuration?.applicationVersion),
                         dashboardPath: str(configuration?.dashboardPath),
                         excludedPaths: str(excluded),
                         tickIntervalMs: str(configuration?.tickIntervalMs),
@@ -57,6 +58,23 @@ export default function ConfigurationPage() {
                         "eventLoopResolutionMs": str(configuration?.publisher.eventLoopResolutionMs)
                     }}
                 />
+            </Hero>
+
+            <Hero header={{ title: "Persistence" }}>
+                {
+                    configuration?.persistence !== false ? (
+                        <HeroContent
+                            variant='default'
+                            values={{
+                                "baseDir": str(configuration?.persistence?.baseDir),
+                                "maxBufferSize": str(configuration?.persistence.maxBufferSize),
+                                "persistRawRequests": str(configuration?.persistence.persistRawRequests),
+                                "archiveIntervalMs": str(configuration?.persistence.archiveIntervalMs)
+                            }}
+                        />
+                    ) :
+                        <p>No persistence configured</p>
+                }
             </Hero>
         </div>
     );

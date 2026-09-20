@@ -1,4 +1,6 @@
 export interface ConfigOptions {
+    applicationVersion?: string;
+
     dashboardPath: string | false;
 
     simulation: false | {
@@ -10,6 +12,12 @@ export interface ConfigOptions {
         slowLatencyThresholdMs: number;
         eventLoopLagThresholdMs: number;
         eventLoopResolutionMs?: number;
+    };
+    persistence: false | {
+        baseDir: string;
+        maxBufferSize?: number;
+        persistRawRequests?: boolean;
+        archiveIntervalMs?: number;
     };
     tickIntervalMs: number;
     excludePaths: string[];

@@ -127,11 +127,18 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
 
         socket.on(
             WebSocketEvents.REQUEST_ANALYTICS_DATA,
-            () => {
-                socket.emit(
-                    WebSocketEvents.RESPONSE_ANALYTICS_DATA,
-                    this.provider.getAnalyticsData()
-                )
+            (filters) => {
+                if (filters === null) {
+                    socket.emit(
+                        WebSocketEvents.RESPONSE_ANALYTICS_DATA,
+                        this.provider.getAnalyticsData()
+                    )
+                } else {
+                    socket.emit(
+                        WebSocketEvents.RESPONSE_FILTERED_ANALYTICS_DATA,
+                        this.provider.getAnalyticsData(filters)
+                    )
+                }
             }
         );
 
