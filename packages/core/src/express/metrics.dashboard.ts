@@ -17,14 +17,14 @@ export function attachDashboard(
         return;
     }
 
-    app.get(`${routePath}/session/:sessionNumber/export`, async (req, res) => {
-        const sessionNumber = req.params.sessionNumber;
-        if (!Number.isFinite(Number(sessionNumber))) {
+    app.get(`/optima/session/:sessionNumber/export`, async (req, res) => {
+        if (isNaN(Number(req.params.sessionNumber))) {
             res.status(400).send('Invalid session number');
             return;
         }
+        const sessionNumber = Number(req.params.sessionNumber);
 
-        const session = await persistence.findSession(Number(sessionNumber));
+        const session = await persistence.findSession(sessionNumber);
         if (!session) {
             res.status(404).send('Session not found');
             return;
@@ -33,7 +33,7 @@ export function attachDashboard(
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename="session-${sessionNumber}-full.json"`);
 
-        await persistence.streamSessionExport(res, Number(sessionNumber));
+        await persistence.streamSessionExport(res, sessionNumber);
         res.end();
     });
 
@@ -45,6 +45,4 @@ export function attachDashboard(
     ) => {
         res.sendFile(indexHtmlPath);
     });
-
-
 }

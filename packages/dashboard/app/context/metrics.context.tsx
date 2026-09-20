@@ -128,7 +128,8 @@ export function MetricsProvider({
     }
 
     async function downloadSession(sessionNumber: number) {
-        const response = await fetch(``);
+        const basePath = window.location.origin;
+        const response = await fetch(`${basePath}/optima/session/${sessionNumber}/export`);
         if (!response.ok) throw new Error(`Failed to download session ${sessionNumber}: ${response.statusText}`);
 
         const blob = await response.blob();
