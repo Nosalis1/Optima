@@ -5,7 +5,8 @@ import type {
     HealthData,
     AnalyticsFilterSettings,
 } from '../domain';
-import { storage } from "../storage";
+import type { LocalRepository } from "../storage";
+import type { ReadonlyConfig } from '../../config';
 import {
     CPUCollector,
     MemoryCollector,
@@ -14,37 +15,49 @@ import {
     HandlesCollector,
     RuntimeCollector
 } from './collectors';
-import { getConfig } from '../../config';
 
-class CollectorService {
+export class CollectorService {
+    private readonly cpuCollector: CPUCollector;
+    private readonly memoryCollector: MemoryCollector;
+    private readonly eventLoopCollector: EventLoopCollector;
+    private readonly gcCollector: GCCollector;
+    private readonly handlesCollector: HandlesCollector;
+    private readonly runtimeCollector: RuntimeCollector;
+
     constructor(
-        private readonly cpuCollector: CPUCollector,
-        private readonly memoryCollector: MemoryCollector,
-        private readonly eventLoopCollector: EventLoopCollector,
-        private readonly gcCollector: GCCollector,
-        private readonly handlesCollector: HandlesCollector,
-        private readonly runtimeCollector: RuntimeCollector,
-    ) { }
+        private readonly storage: LocalRepository,
+        private readonly config: ReadonlyConfig,
+    ) {
+        this.cpuCollector = new CPUCollector();
+        this.memoryCollector = new MemoryCollector();
+        this.eventLoopCollector = new EventLoopCollector(
+            this.config.publisher.eventLoopResolutionMs,
+            this.config.publisher.eventLoopLagThresholdMs
+        );
+        this.gcCollector = new GCCollector();
+        this.handlesCollector = new HandlesCollector();
+        this.runtimeCollector = new RuntimeCollector();
+    }
 
     getSystemStaticInfo(): SystemStaticInfo {
-        return storage.system.get();
+        return this.storage.system.get();
     }
 
     getDashboardData(): DashboardData {
-        return storage.dashboard.get();
+        return this.storage.dashboard.get();
     }
 
     getAnalyticsData(filters?: AnalyticsFilterSettings): AnalyticsData {
-        return storage.analytics.get(filters?.page || 1, 5, filters);
+        return this.storage.analytics.get(filters?.page || 1, 5, filters);
     }
 
     getHealthData(): HealthData {
-        return storage.health.get();
+        return this.storage.health.get();
     }
 
     tick() {
         const cpuData = this.cpuCollector.collect();
-        storage.health.updateCPU({
+        this.storage.health.updateCPU({
             usageRate: cpuData.totalPercent,
             numberOfCores: cpuData.numberOfCores,
             perCoreUsage: cpuData.perCoreUsage,
@@ -54,7 +67,7 @@ class CollectorService {
         });
 
         const memoryData = this.memoryCollector.collect();
-        storage.health.updateMemory({
+        this.storage.health.updateMemory({
             heapUsage: memoryData.heapUsage,
             heapSize: memoryData.heapSize,
 
@@ -65,13 +78,13 @@ class CollectorService {
         });
 
         const eventLoopData = this.eventLoopCollector.collect();
-        storage.health.updateEventLoop({
+        this.storage.health.updateEventLoop({
             lag: eventLoopData.meanMs,
             threshold: this.eventLoopCollector.thresholdMs,
         });
 
         const handlesData = this.handlesCollector.collect();
-        storage.health.updateHandles({
+        this.storage.health.updateHandles({
             activeHandles: handlesData.activeHandles,
             activeHandlesTimers: handlesData.activeHandlesTimers,
             activeHandlesSockets: handlesData.activeHandlesSockets,
@@ -81,7 +94,7 @@ class CollectorService {
         });
 
         const gcData = this.gcCollector.collect();
-        storage.health.updateGC({
+        this.storage.health.updateGC({
             gcCount: gcData.gcCount,
             gcTime: gcData.gcTime,
             gcPauseAverage: gcData.gcPauseAverage,
@@ -93,7 +106,7 @@ class CollectorService {
         });
 
         const runtimeData = this.runtimeCollector.collect();
-        storage.health.updateRuntime({
+        this.storage.health.updateRuntime({
             pid: runtimeData.pid,
             platform: runtimeData.platform,
             nodeVersion: runtimeData.nodeVersion,
@@ -105,18 +118,6 @@ class CollectorService {
             startup: runtimeData.startup
         });
 
-        storage.tick();
+        this.storage.tick();
     }
 }
-
-export const collectorService = new CollectorService(
-    new CPUCollector(),
-    new MemoryCollector(),
-    new EventLoopCollector(
-        getConfig().publisher.eventLoopResolutionMs,
-        getConfig().publisher.eventLoopLagThresholdMs
-    ),
-    new GCCollector(),
-    new HandlesCollector(),
-    new RuntimeCollector(),
-);

@@ -6,6 +6,7 @@ import {
 export class ConfigManager {
     private static instance: ConfigManager;
     private config!: ReadonlyConfig;
+    private initialized: boolean = false;
 
     private readonly defaultConfig: ReadonlyConfig =
         Object.freeze({
@@ -13,10 +14,7 @@ export class ConfigManager {
 
             dashboardPath: '/optima-metrics',
 
-            simulation: {
-                intervalMs: 100,
-                requestsPerTick: 20,
-            },
+            simulation: false,
             publisher: {
                 intervalMs: 1000,
                 slowLatencyThresholdMs: 500,
@@ -63,11 +61,13 @@ export class ConfigManager {
     public initialize(
         userOptions?: ConfigOptions
     ): ReadonlyConfig {
+        if (this.initialized) return this.config;
         const validated = this.validateAndSanitize(userOptions);
         this.config = Object.freeze({
             ...this.defaultConfig,
             ...validated
         });
+        this.initialized = true;
         return this.config;
     }
 

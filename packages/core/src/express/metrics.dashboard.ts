@@ -2,12 +2,12 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import Logger from '../core/telemetry/logger';
-import type { PersistenceLayer } from '../core/storage';
+import type { PersistenceRepository } from '../core/storage';
 
 export function attachDashboard(
     app: express.Express,
     routePath: string = '/dashboard',
-    persistence: PersistenceLayer
+    persistence: PersistenceRepository
 ): void {
     const dashboardDir = path.join(__dirname, '../../dashboard-out');
     const indexHtmlPath = path.join(dashboardDir, 'index.html');

@@ -1,4 +1,4 @@
-import { PersistenceLayer } from '../storage/persistence.layer';
+import { PersistenceRepository } from '../storage/persistence.layer';
 import { ApplicationEvent } from '../domain';
 import Logger from '../telemetry/logger';
 
@@ -9,9 +9,10 @@ type ApplicationEventManagerInstance = Omit<ApplicationEventManager, 'start' | '
 export class ApplicationEventManager {
     static instance: ApplicationEventManagerInstance | null = null;
     private listeners: Array<AsyncListener> = [];
+    private initilized: boolean = false;
 
     constructor(
-        private persistence: PersistenceLayer,
+        private persistence: PersistenceRepository,
         private applicationVersion: string = ''
     ) {
         if (ApplicationEventManager.instance) {
@@ -21,19 +22,23 @@ export class ApplicationEventManager {
     }
 
     start() {
+        if (this.initilized) return;
         this.on((event) => this.persistence.onApplicationEvent(event));
         this.on(async (event) => {
             if (event.type === 'SHUTDOWN') {
                 await this.persistence.shutdown();
             }
         });
+        this.initilized = true;
     }
 
     stop() {
+        if (!this.initilized) return;
         for (const listener of this.listeners) {
             this.off(listener);
         }
         this.listeners = [];
+        this.initilized = false;
     }
 
     on(listener: AsyncListener) {
@@ -45,6 +50,7 @@ export class ApplicationEventManager {
     }
 
     async emit(event: AppPartialEvent): Promise<void> {
+        if (!this.initilized) return;
         const fullEvent: ApplicationEvent = {
             timestamp: new Date().toISOString(),
             type: event.type,

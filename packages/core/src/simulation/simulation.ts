@@ -1,4 +1,4 @@
-import { storage } from "../core/storage/local.repository";
+import { LocalRepository } from "../core/storage/local.repository";
 import type {
     TelemetryRequest
 } from "../core/domain";
@@ -162,7 +162,7 @@ export class TrafficSimulator {
     private running = false;
 
     constructor(
-        private readonly repository = storage
+        private readonly repository: LocalRepository
     ) { }
 
     start(options?: { intervalMs?: number; requestsPerTick?: number; }) {

@@ -18,7 +18,7 @@ app.use(express.json());
 const optima = setupOptima(app, {
     dashboardPath: '/optima-metrics',
     simulation: {
-        intervalMs: 1000,
+        intervalMs: 200,
         requestsPerTick: 25,
     },
     publisher: {

@@ -13,18 +13,17 @@ import { MetricsInterceptor } from './metrics.interceptor';
 import { NestAdapter } from './metrics.adapter';
 import { NestWebSocketAdapter } from './metrics-websocket.adapter';
 import { MetricsBootstrapService } from './metrics.bootstrap.service';
-import TelemetryService from '../core/telemetry/telemetry.service';
 import {
     ConfigOptions,
     ConfigManager,
 } from '../config';
 import fs from 'fs';
 import Logger from '../core/telemetry/logger';
+import { createOptimaRuntime } from '../runtime';
 
 @Global()
 @Module({
     providers: [
-        TelemetryService,
         NestAdapter,
         NestWebSocketAdapter,
         MetricsBootstrapService,
@@ -33,19 +32,23 @@ import Logger from '../core/telemetry/logger';
             useClass: MetricsInterceptor
         },
     ],
-    exports: [
-        TelemetryService,
-    ],
+    exports: ['METRICS_CONFIG', 'OPTIMA_RUNTIME_DEPENDENCIES'],
 })
 export class MetricsModule implements NestModule {
     static forRoot(options?: ConfigOptions): DynamicModule {
         ConfigManager.getInstance().initialize(options);
+        const dependencies = createOptimaRuntime(ConfigManager.getInstance().get());
+
         return {
             module: MetricsModule,
             providers: [
                 {
                     provide: 'METRICS_CONFIG',
                     useValue: ConfigManager.getInstance().get(),
+                },
+                {
+                    provide: 'OPTIMA_RUNTIME_DEPENDENCIES',
+                    useValue: dependencies,
                 }
             ],
             exports: ['METRICS_CONFIG'],

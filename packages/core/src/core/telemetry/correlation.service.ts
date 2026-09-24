@@ -1,4 +1,4 @@
-import { storage } from '../storage/local.repository';
+import type { LocalRepository } from '../storage/local.repository';
 import {
     pearsonCorrelation,
     spearmanCorrelation,
@@ -15,19 +15,21 @@ type PerformanceReport = {
     recommendation: string;
 };
 
-class CorrelationService {
+export class CorrelationService {
     private readonly sampleSize: number;
 
-    constructor() {
+    constructor(
+        private readonly storage: LocalRepository
+    ) {
         this.sampleSize =
             calculateSampleSizeProportion(0.05, 0.95) //! This maybe from config?
     }
 
     tick(): void {
-        const totalHistory = storage.bucket.getHistory();
+        const totalHistory = this.storage.bucket.getHistory();
         const size = totalHistory.length;
 
-        if (size < this.sampleSize) {
+        if (size < this.sampleSize) { //! This is not triggering on high sampleSizes, cap is config bucket size
             return;
         }
 
@@ -84,8 +86,6 @@ class CorrelationService {
 
     private handleReport(report: PerformanceReport): void {
         if (report.status === 'STABLE') return;
-        storage.alerts.warning(report.recommendation);
+        this.storage.alerts.warning(report.recommendation);
     }
 }
-
-export const correlationService = new CorrelationService();

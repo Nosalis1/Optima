@@ -12,10 +12,10 @@ import type { Server, Socket } from 'socket.io';
 import type { WebSocketAdapter } from '../adapters/websocket.adapter';
 
 import { WebSocketEvents } from '../core/delivery';
-import { collectorService } from '../core/telemetry/collector.service';
-import { persistence } from '../core/storage';
 import Logger from '../core/telemetry/logger';
 import type { AnalyticsFilterSettings } from '../core/domain';
+import { Inject } from '@nestjs/common';
+import type { OptimaRuntimeDependencies } from '../runtime';
 
 @WebSocketGateway({
     transports: ['websocket'],
@@ -33,6 +33,11 @@ export class NestWebSocketAdapter
     @WebSocketServer()
     private server!: Server;
 
+    constructor(
+        @Inject('OPTIMA_RUNTIME_DEPENDENCIES')
+        private readonly dependencies: OptimaRuntimeDependencies,
+    ) { }
+
     init(): void { }
 
     async handleConnection(
@@ -45,7 +50,7 @@ export class NestWebSocketAdapter
 
         socket.emit(
             WebSocketEvents.RESPONSE_SESSION_METADATA,
-            await persistence.getSessionManifest(),
+            await this.dependencies.persistence.getSessionManifest(),
         );
     }
 
@@ -66,7 +71,7 @@ export class NestWebSocketAdapter
     ): void {
         socket.emit(
             WebSocketEvents.RESPONSE_SESSION_METADATA,
-            persistence.getSessionManifest(),
+            this.dependencies.persistence.getSessionManifest(),
         );
     }
 
@@ -79,7 +84,7 @@ export class NestWebSocketAdapter
     ): Promise<void> {
         const { sessionNumber } = payload;
 
-        const summary = await persistence.getSessionSummary(sessionNumber);
+        const summary = await this.dependencies.persistence.getSessionSummary(sessionNumber);
 
         socket.emit(
             WebSocketEvents.RESPONSE_SESSION_SUMMARY,
@@ -95,7 +100,7 @@ export class NestWebSocketAdapter
     ): void {
         socket.emit(
             WebSocketEvents.RESPONSE_SYSTEM_DATA,
-            collectorService.getSystemStaticInfo(),
+            this.dependencies.collector.getSystemStaticInfo(),
         );
     }
 
@@ -107,7 +112,7 @@ export class NestWebSocketAdapter
     ): void {
         socket.emit(
             WebSocketEvents.RESPONSE_DASHBOARD_DATA,
-            collectorService.getDashboardData(),
+            this.dependencies.collector.getDashboardData(),
         );
     }
 
@@ -120,7 +125,7 @@ export class NestWebSocketAdapter
     ): void {
         socket.emit(
             WebSocketEvents.RESPONSE_ANALYTICS_DATA,
-            collectorService.getAnalyticsData(payload.filters),
+            this.dependencies.collector.getAnalyticsData(payload.filters),
         );
     }
 
@@ -132,7 +137,7 @@ export class NestWebSocketAdapter
     ): void {
         socket.emit(
             WebSocketEvents.RESPONSE_HEALTH_DATA,
-            collectorService.getHealthData(),
+            this.dependencies.collector.getHealthData(),
         );
     }
 

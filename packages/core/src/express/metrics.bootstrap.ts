@@ -1,20 +1,18 @@
 import { Server as HTTPServer } from 'http';
 import { ExpressWebSocketAdapter } from './metrics-websocket.adapter';
-import { collectorService } from '../core/telemetry/collector.service';
 import { TrafficSimulator } from '../simulation/simulation';
 import { MetricsPublisher } from '../core/delivery';
-import { correlationService } from '../core/telemetry/correlation.service';
 import { getConfig } from '../config';
 import Logger from '../core/telemetry/logger';
-import { persistence } from '../core/storage';
 import { IntervalManager, ApplicationEventManager } from '../core/organizers';
+import type { OptimaRuntimeDependencies } from '../runtime';
 
-export function expressMetricsBootstrap(server: HTTPServer) {
+export function expressMetricsBootstrap(server: HTTPServer, dependencies: OptimaRuntimeDependencies): () => Promise<void> {
     const config = getConfig();
 
     let simulator: TrafficSimulator | null = null;
     if (config.simulation) {
-        simulator = new TrafficSimulator();
+        simulator = new TrafficSimulator(dependencies.storage);
         simulator.start({
             intervalMs: config.simulation.intervalMs,
             requestsPerTick: config.simulation.requestsPerTick,
@@ -23,28 +21,28 @@ export function expressMetricsBootstrap(server: HTTPServer) {
 
     const websocket = new ExpressWebSocketAdapter(
         server,
-        collectorService,
-        persistence
+        dependencies.collector,
+        dependencies.persistence
     );
 
     websocket.init();
 
     const eventManager = new ApplicationEventManager(
-        persistence,
+        dependencies.persistence,
         config.applicationVersion
     );
     eventManager.start();
 
     const publisher = new MetricsPublisher(
-        collectorService,
-        persistence,
+        dependencies.collector,
+        dependencies.persistence,
         websocket
     );
 
     const intervalManager = new IntervalManager({
-        tick: () => { collectorService.tick(); correlationService.tick(); },
-        publisher: () => { publisher.publish(); persistence.onPublisherTick(publisher.retrieveLastPublishedData() || null); },
-        persistence: () => { persistence.archiveAllCategories(); }
+        tick: () => { dependencies.collector.tick(); dependencies.correlation.tick(); },
+        publisher: () => { publisher.publish(); dependencies.persistence.onPublisherTick(publisher.retrieveLastPublishedData() || null); },
+        persistence: () => { dependencies.persistence.archiveAllCategories(); }
     });
 
     intervalManager.startIntervals();

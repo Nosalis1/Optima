@@ -9,19 +9,21 @@ import {
 interface EndpointRecord {
     method: HttpMethod | string;
     route: string;
-
     requestCount: number;
+    rps: number;
     errorCount: number;
-
     totalLatency: number;
-
     histogram: Histogram;
-
     lastRequestAt: number;
 }
 
+interface EndpointTrackingRecord extends EndpointRecord {
+    lastCalculationRequestCount: number;
+    lastRecalculatedAt: number;
+}
+
 class EndpointStore {
-    private readonly endpoints = new Map<string, EndpointRecord>();
+    private readonly endpoints = new Map<string, EndpointTrackingRecord>();
 
     private createKey(method: HttpMethod | string, route: string): string {
         return `${method}:${route}`;
@@ -40,6 +42,9 @@ class EndpointStore {
                 totalLatency: 0,
                 histogram: new Histogram(),
                 lastRequestAt: Date.now(),
+                rps: 0,
+                lastCalculationRequestCount: 0,
+                lastRecalculatedAt: 0,
             };
 
             this.endpoints.set(key, endpoint);
@@ -53,6 +58,8 @@ class EndpointStore {
         if (input.statusCode >= 400) {
             endpoint.errorCount++;
         }
+
+        this.handleTrackingRecord(endpoint, Date.now());
     }
 
     get(method: string, route: string): EndpointTelemetry | undefined {
@@ -60,21 +67,23 @@ class EndpointStore {
         if (!endpoint) {
             return undefined;
         }
-        return this.map(endpoint);
+        return this.map(endpoint, Date.now());
     }
 
     all(): EndpointTelemetry[] {
-        return [...this.endpoints.values()].map(endpoint => this.map(endpoint));
+        const now = Date.now();
+        return [...this.endpoints.values()].map(endpoint => this.map(endpoint, now));
     }
 
-    private map(endpoint: EndpointRecord): EndpointTelemetry {
+    private map(endpoint: EndpointTrackingRecord, now: number): EndpointTelemetry {
         const histogram = endpoint.histogram.snapshot();
+
+        this.handleTrackingRecord(endpoint, now);
 
         return {
             method: endpoint.method,
             route: endpoint.route,
-            rps: endpoint.requestCount - histogram.count, //????
-            // calculated later from buckets
+            rps: endpoint.rps,
             requestCount: endpoint.requestCount,
             averageLatency: endpoint.requestCount === 0 ? 0 : endpoint.totalLatency / endpoint.requestCount,
             p95: histogram.p95,
@@ -82,6 +91,15 @@ class EndpointStore {
             errorRate: endpoint.requestCount === 0 ? 0 : endpoint.errorCount / endpoint.requestCount,
             status: endpoint.errorCount > 0 ? "DEGRADED" : "HEALTHY",
         };
+    }
+
+    private handleTrackingRecord(endpoint: EndpointTrackingRecord, now: number): void {
+        if (now - endpoint.lastRecalculatedAt >= 1000) {
+            const requestsSinceLastCalculation = endpoint.requestCount - endpoint.lastCalculationRequestCount;
+            endpoint.rps = requestsSinceLastCalculation;
+            endpoint.lastCalculationRequestCount = endpoint.requestCount;
+            endpoint.lastRecalculatedAt = now;
+        }
     }
 
     reset(): void {

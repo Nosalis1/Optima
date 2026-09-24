@@ -4,19 +4,18 @@ import {
     OnApplicationBootstrap,
     OnApplicationShutdown,
 } from '@nestjs/common';
-import { collectorService } from '../core/telemetry/collector.service';
-import { correlationService } from '../core/telemetry/correlation.service';
 import { MetricsPublisher } from '../core/delivery';
 import { TrafficSimulator } from '../simulation/simulation';
 import { NestWebSocketAdapter } from './metrics-websocket.adapter';
 import { type ReadonlyConfig } from '../config';
 import Logger from '../core/telemetry/logger';
-import { persistence } from '../core/storage';
 import { ApplicationEventManager, IntervalManager } from '../core/organizers';
+import { createOptimaRuntime, type OptimaRuntimeDependencies } from '../runtime';
 
 @Injectable()
 export class MetricsBootstrapService
     implements OnApplicationBootstrap, OnApplicationShutdown {
+
     private simulator: TrafficSimulator | null = null;
     private publisher: MetricsPublisher | null = null;
     private intervalManager: IntervalManager | null = null;
@@ -26,36 +25,43 @@ export class MetricsBootstrapService
         private readonly websocket: NestWebSocketAdapter,
         @Inject('METRICS_CONFIG')
         private readonly config: ReadonlyConfig,
+        @Inject('OPTIMA_RUNTIME_DEPENDENCIES')
+        private readonly dependencies: OptimaRuntimeDependencies,
     ) { }
 
     onApplicationBootstrap(): void {
+        if (!this.dependencies) {
+            Logger.error('Failed to create Optima runtime dependencies.');
+            return;
+        }
+
         const simulationConfig = this.config.simulation === false
             ? null
             : this.config.simulation;
 
         if (simulationConfig) {
-            this.simulator = new TrafficSimulator();
+            this.simulator = new TrafficSimulator(this.dependencies!.storage);
             this.simulator.start(simulationConfig);
         }
 
         this.websocket.init();
 
         this.eventManager = new ApplicationEventManager(
-            persistence,
+            this.dependencies.persistence,
             this.config.applicationVersion
         );
         this.eventManager.start();
 
         this.publisher = new MetricsPublisher(
-            collectorService,
-            persistence,
+            this.dependencies.collector,
+            this.dependencies.persistence,
             this.websocket,
         );
 
         this.intervalManager = new IntervalManager({
-            tick: () => { collectorService.tick(); correlationService.tick(); },
-            publisher: () => { this.publisher?.publish(); persistence.onPublisherTick(this.publisher?.retrieveLastPublishedData() || null); },
-            persistence: () => { persistence.archiveAllCategories(); }
+            tick: () => { this.dependencies!.collector.tick(); this.dependencies!.correlation.tick(); },
+            publisher: () => { this.publisher?.publish(); this.dependencies!.persistence.onPublisherTick(this.publisher?.retrieveLastPublishedData() || null); },
+            persistence: () => { this.dependencies!.persistence.archiveAllCategories(); }
         });
 
         this.intervalManager.startIntervals();

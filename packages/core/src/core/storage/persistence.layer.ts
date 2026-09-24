@@ -57,7 +57,7 @@ interface HourBucketAccumulator {
     sampleCount: number;
 };
 
-export class PersistenceLayer {
+export class PersistenceRepository {
     private httpBuffer: HttpMetricRecord[] = [];
     private readonly enabled: boolean;
     private readonly maxBufferSize: number;
@@ -68,18 +68,19 @@ export class PersistenceLayer {
     private sessionMeta: SessionMetadata | null = null;
     private readonly manifestPath: string;
 
-    constructor() {
-        const config: ReadonlyConfig['persistence'] = getConfig().persistence;
-        if (typeof config === 'boolean') {
-            this.enabled = config;
+    constructor(
+        private readonly config: ReadonlyConfig
+    ) {
+        if (typeof config.persistence === 'boolean') {
+            this.enabled = config.persistence;
             this.baseDir = './metrics_data';
             this.maxBufferSize = 200;
             this.persistRawRequests = false;
         } else {
             this.enabled = true;
-            this.baseDir = config.baseDir;
-            this.maxBufferSize = config.maxBufferSize ?? 200;
-            this.persistRawRequests = config.persistRawRequests ?? false;
+            this.baseDir = config.persistence.baseDir;
+            this.maxBufferSize = config.persistence.maxBufferSize ?? 200;
+            this.persistRawRequests = config.persistence.persistRawRequests ?? false;
         }
         this.manifestPath = path.join(this.baseDir, 'session-manifest.json');
 
@@ -432,5 +433,3 @@ export class PersistenceLayer {
 
     //#endregion
 }
-
-export const persistence = new PersistenceLayer();

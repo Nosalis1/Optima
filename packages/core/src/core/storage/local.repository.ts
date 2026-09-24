@@ -1,5 +1,5 @@
 import type { TelemetryRequest } from '../domain';
-import { getConfig } from '../../config';
+import type { ReadonlyConfig } from '../../config';
 import {
     BucketStore,
     DashboardStore,
@@ -11,9 +11,9 @@ import {
     MetricsStore
 } from './stores';
 import { ApplicationEventManager } from '../organizers';
-import { persistence, PersistenceLayer } from './persistence.layer';
+import { PersistenceRepository } from './persistence.layer';
 
-class LocalRepository {
+export class LocalRepository {
     // Standard Stores
     readonly endpoint: EndpointStore;
     readonly alerts: AlertStore;
@@ -28,12 +28,10 @@ class LocalRepository {
     readonly analytics: AnalyticsStore;
     readonly system: SystemStore;
 
-    // Persistence
-    readonly persistence: PersistenceLayer = persistence;
-
-    constructor() {
-        const config = getConfig();
-
+    constructor(
+        private readonly persistence: PersistenceRepository,
+        private readonly config: ReadonlyConfig
+    ) {
         // Standard 
         this.endpoint = new EndpointStore();
         this.alerts = new AlertStore(
@@ -109,5 +107,3 @@ class LocalRepository {
         this.bucket.flush();
     }
 }
-
-export const storage = new LocalRepository();

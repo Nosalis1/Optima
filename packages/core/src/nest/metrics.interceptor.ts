@@ -1,15 +1,16 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, Inject, NestInterceptor } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import TelemetryService from '../core/telemetry/telemetry.service';
 import { NestAdapter } from './metrics.adapter';
 import Logger from '../core/telemetry/logger';
+import type { OptimaRuntimeDependencies } from '../runtime';
 
 @Injectable()
 export class MetricsInterceptor implements NestInterceptor {
     constructor(
         private readonly adapter: NestAdapter,
-        private readonly telemetryService: TelemetryService
+        @Inject('OPTIMA_RUNTIME_DEPENDENCIES')
+        private readonly dependencies: OptimaRuntimeDependencies,
     ) { }
 
     intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -25,7 +26,7 @@ export class MetricsInterceptor implements NestInterceptor {
         const requestData = this.adapter.getRequest(context);
         const responseData = this.adapter.getResponse(context);
 
-        const telemetryRequest = this.telemetryService.record({
+        const telemetryRequest = this.dependencies.telemetry.record({
             endpoint: requestData.endpoint,
             method: requestData.method,
             statusCode: responseData.statusCode,

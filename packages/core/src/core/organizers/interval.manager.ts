@@ -9,6 +9,8 @@ type IntervalType = 'tick' | 'publisher' | 'persistence';
 
 export class IntervalManager {
     private intervals: Record<IntervalType, Interval | null> = { tick: null, publisher: null, persistence: null, };
+    private initialized: boolean = false;
+    private started: boolean = false;
 
     constructor(callbacks: Record<IntervalType, TickCallback | TickCallbackAsync | null>) {
         const config = getConfig();
@@ -32,18 +34,22 @@ export class IntervalManager {
                 intervalMs: config.persistence.archiveIntervalMs ?? 24 * 60 * 60 * 1000,
             } : null;
         }
+        this.initialized = true;
     }
 
     startIntervals() {
+        if (!this.initialized || this.started) return;
         for (const intervalType in this.intervals) {
             const interval = this.intervals[intervalType as IntervalType];
             if (interval && interval.callback) {
                 interval.id = setInterval(interval.callback, interval.intervalMs);
             }
         }
+        this.started = true;
     }
 
     stopIntervals() {
+        if (!this.initialized || !this.started) return;
         for (const intervalType in this.intervals) {
             const interval = this.intervals[intervalType as IntervalType];
             if (interval && interval.id) {
@@ -51,5 +57,6 @@ export class IntervalManager {
                 interval.id = null;
             }
         }
+        this.started = false;
     }
 }
