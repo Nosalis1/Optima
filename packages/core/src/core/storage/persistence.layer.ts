@@ -1,5 +1,5 @@
 import path from "path";
-import { getConfig, ReadonlyConfig } from "../../config";
+import type { ReadonlyConfig } from "../../config";
 import {
     constructFilePath,
     appendRecordsAsync,

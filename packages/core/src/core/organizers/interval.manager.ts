@@ -1,4 +1,4 @@
-import { getConfig } from "../../config";
+import type { ReadonlyConfig } from "../../config";
 
 interface TickCallback { (): void; }
 interface TickCallbackAsync { (): Promise<void>; }
@@ -12,9 +12,10 @@ export class IntervalManager {
     private initialized: boolean = false;
     private started: boolean = false;
 
-    constructor(callbacks: Record<IntervalType, TickCallback | TickCallbackAsync | null>) {
-        const config = getConfig();
-
+    constructor(
+        callbacks: Record<IntervalType, TickCallback | TickCallbackAsync | null>,
+        private readonly config: ReadonlyConfig
+    ) {
         this.intervals.tick = callbacks.tick ? {
             id: null,
             callback: callbacks.tick,

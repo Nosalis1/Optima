@@ -62,7 +62,7 @@ export class MetricsBootstrapService
             tick: () => { this.dependencies!.collector.tick(); this.dependencies!.correlation.tick(); },
             publisher: () => { this.publisher?.publish(); this.dependencies!.persistence.onPublisherTick(this.publisher?.retrieveLastPublishedData() || null); },
             persistence: () => { this.dependencies!.persistence.archiveAllCategories(); }
-        });
+        }, this.config);
 
         this.intervalManager.startIntervals();
 

@@ -43,7 +43,7 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
         tick: () => { dependencies.collector.tick(); dependencies.correlation.tick(); },
         publisher: () => { publisher.publish(); dependencies.persistence.onPublisherTick(publisher.retrieveLastPublishedData() || null); },
         persistence: () => { dependencies.persistence.archiveAllCategories(); }
-    });
+    }, config);
 
     intervalManager.startIntervals();
 

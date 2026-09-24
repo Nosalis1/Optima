@@ -17,7 +17,7 @@ export function createOptimaRuntime(config: ReadonlyConfig): OptimaRuntimeDepend
     const storage = new LocalRepository(persistence, config);
     const collector = new CollectorService(storage, config);
     const correlation = new CorrelationService(storage);
-    const telemetry = new TelemetryService(storage);
+    const telemetry = new TelemetryService(storage, config);
 
     return { storage, persistence, collector, correlation, telemetry };
 }

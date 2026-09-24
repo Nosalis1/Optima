@@ -1,16 +1,17 @@
 import type { TelemetryRequest } from '../domain';
-import { getConfig } from '../../config';
+import type { ReadonlyConfig } from '../../config';
 
 export class TelemetryService {
     constructor(
         private readonly storage: {
             record(request: TelemetryRequest): void;
         },
+        private readonly config: ReadonlyConfig
     ) { }
 
     private isPathExcluded(endpoint: string): boolean {
         const cleanPath = endpoint.split('?')[0];
-        const userConfig = getConfig();
+        const userConfig = this.config;
 
         const configuredPaths = userConfig?.excludePaths || [];
         const allPatterns = [...configuredPaths];
