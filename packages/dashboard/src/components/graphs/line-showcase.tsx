@@ -22,7 +22,7 @@ function getMaxValue(points: Point[]): number {
 export default function LineShowcase({
     data
 }: Props) {
-    const { width: chartWidth, height: chartHeight, isHydrated } = useSize('line-showcase');
+    const { width: chartWidth, height: chartHeight, isHydrated, ref } = useSize();
 
     const minValue = 0;
     const maxValue = getMaxValue(data.points);
@@ -42,7 +42,7 @@ export default function LineShowcase({
     }).join(' ');
 
     return (
-        <div className={`w-full h-16 rounded-md`} id={"line-showcase"}>
+        <div ref={ref} className={`w-full h-16 rounded-md`} id={"line-showcase"}>
             {
                 isHydrated && (
                     <svg className="w-full h-full">

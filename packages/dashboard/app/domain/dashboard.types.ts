@@ -1,7 +1,28 @@
 import { AlertMessage, PaginationMeta } from './common.types';
-import { CpuMetrics, MemoryMetrics, EventLoopMetrics, GCMetrics, LibuvHandles, HistoricTimeSeries } from './metrics.types';
+import { CpuMetrics, MemoryMetrics, EventLoopMetrics, GCMetrics, LibuvHandles, HistoricTimeSeries, HistoricTickSeries } from './metrics.types';
 import { V8RuntimeInfo } from './system.types';
 import { EndpointTelemetry, EndpointLatencyDistribution, EndpointVolume } from './endpoints.types';
+
+interface DashboardChartData<T> {
+    throughput: {
+        rps: T;
+        errorClient: T;
+        errorServer: T;
+        totalCount: number;
+    };
+    percentiles: {
+        p50: T;
+        p95: T;
+        p99: T;
+        totalCount: number;
+    };
+    runtimePerformance: {
+        heapUsage: T;
+        heapSize: T;
+        lag: T;
+        totalCount: number;
+    };
+}
 
 // Primary App view container
 export interface DashboardData {
@@ -21,26 +42,18 @@ export interface DashboardData {
     alerts: AlertMessage[];
 
     // Explicit chart configuration maps matching chart configurations directly
-    charts: {
-        throughput: {
-            rps: number[];
-            errorClient: number[];
-            errorServer: number[];
-            totalCount: number;
-        },
-        percentiles: {
-            p50: number[];
-            p95: number[];
-            p99: number[];
-            totalCount: number;
-        };
-        runtimePerformance: {
-            heapUsage: number[];
-            heapSize: number[];
-            lag: number[];
-            totalCount: number;
-        };
-    };
+    charts: DashboardChartData<number[]>;
+}
+
+// Tick data for the dashboard, representing a snapshot of metrics at a specific point in time
+export interface DashboardTickData {
+    current: DashboardData['current'];
+
+    history: HistoricTickSeries;
+    impactEndpoints: DashboardData['impactEndpoints'];
+    alerts: DashboardData['alerts'];
+
+    charts: DashboardChartData<number>;
 }
 
 // Deep analytics engine slice

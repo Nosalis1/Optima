@@ -1,20 +1,21 @@
 "use client";
 import React from 'react';
 
-export function useSize(id: string = "graph-root", defaultWidth: number = 40, defaultHeight: number = 80) {
+export function useSize<T extends HTMLElement = HTMLDivElement>(defaultWidth: number = 40, defaultHeight: number = 80) {
+    const ref = React.useRef<T | null>(null);
     const [dimensions, setDimensions] = React.useState({ width: defaultWidth, height: defaultHeight });
     const [isHydrated, setIsHydrated] = React.useState(false);
 
     React.useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+
         let frame: number | undefined;
         let resizeObserver: ResizeObserver | undefined;
 
         const updateDimensions = () => {
-            const chartContainer = document.getElementById(id);
-            if (!chartContainer) return;
-
-            const width = Math.round(chartContainer.getBoundingClientRect().width);
-            const height = Math.round(chartContainer.getBoundingClientRect().height);
+            const width = Math.round(el.getBoundingClientRect().width);
+            const height = Math.round(el.getBoundingClientRect().height);
 
             setDimensions((current) => {
                 if (current.width === width && current.height === height) {
@@ -27,10 +28,9 @@ export function useSize(id: string = "graph-root", defaultWidth: number = 40, de
         setIsHydrated(true);
         window.addEventListener('resize', updateDimensions);
 
-        const chartContainer = document.getElementById(id);
-        if (typeof ResizeObserver !== 'undefined' && chartContainer) {
+        if (typeof ResizeObserver !== 'undefined') {
             resizeObserver = new ResizeObserver(updateDimensions);
-            resizeObserver.observe(chartContainer);
+            resizeObserver.observe(el);
         }
 
         frame = window.requestAnimationFrame(updateDimensions);
@@ -42,10 +42,11 @@ export function useSize(id: string = "graph-root", defaultWidth: number = 40, de
                 window.cancelAnimationFrame(frame);
             }
         };
-    }, [id]);
+    }, []);
 
     return {
         ...dimensions,
-        isHydrated
-    }
+        isHydrated,
+        ref
+    };
 }

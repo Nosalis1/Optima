@@ -43,7 +43,7 @@ export default function Heatmap({
     minColor = "#1e293b",
     maxColor = "#10b981",
 }: Props) {
-    const { width: chartWidth, height: chartHeight, isHydrated } = useSize();
+    const { width: chartWidth, height: chartHeight, isHydrated, ref } = useSize();
 
     if (!xAxisLabels.length || !yAxisLabels.length || !data.length) {
         return null;
@@ -75,6 +75,7 @@ export default function Heatmap({
 
     return (
         <Grid
+            ref={ref}
             isHydrated={isHydrated}
             chartWidth={chartWidth}
             chartHeight={chartHeight}
@@ -136,7 +137,6 @@ export default function Heatmap({
                     );
                 });
             })}
-
         </Grid>
     );
 }

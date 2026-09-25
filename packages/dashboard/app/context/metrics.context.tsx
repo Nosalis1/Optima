@@ -7,6 +7,7 @@ import {
 import type {
     AnalyticsData,
     DashboardData,
+    DashboardTickData,
     HealthData,
     SessionMetadata,
     SessionSummary,
@@ -76,6 +77,62 @@ export function MetricsProvider({
         return f.query !== '' || f.method !== 'ALL' || f.status !== 'ALL' || f.page !== 1;
     }
 
+    function appendTickData(newTick: DashboardTickData) {
+        function append<T>(values: T[], value: T): T[] {
+            values.push(value);
+            if (values.length > 60) {
+                values.shift();
+            }
+            return values;
+        }
+
+        setData(prev => ({
+            ...prev,
+            dashboard: {
+                ...prev.dashboard,
+
+                current: newTick.current,
+                history: {
+                    rps: append(prev.dashboard.history.rps, newTick.history.rps),
+                    latency: append(prev.dashboard.history.latency, newTick.history.latency),
+                    errorRate: append(prev.dashboard.history.errorRate, newTick.history.errorRate),
+                    eventLoopLag: append(prev.dashboard.history.eventLoopLag, newTick.history.eventLoopLag),
+                    heapUsage: append(prev.dashboard.history.heapUsage, newTick.history.heapUsage),
+                    heapSize: append(prev.dashboard.history.heapSize, newTick.history.heapSize),
+                    rssMemory: append(prev.dashboard.history.rssMemory, newTick.history.rssMemory),
+                    totalHeap: append(prev.dashboard.history.totalHeap, newTick.history.totalHeap),
+                    p95: newTick.history.p95 ? append(prev.dashboard.history.p95 ?? Array.from({ length: 60 }, () => 0), newTick.history.p95) : undefined,
+                    p99: newTick.history.p99 ? append(prev.dashboard.history.p99 ?? Array.from({ length: 60 }, () => 0), newTick.history.p99) : undefined
+                },
+                impactEndpoints: newTick.impactEndpoints,
+                alerts: newTick.alerts,
+
+                charts: {
+                    throughput: {
+                        rps: append(prev.dashboard.charts.throughput.rps, newTick.charts.throughput.rps),
+                        errorClient: append(prev.dashboard.charts.throughput.errorClient, newTick.charts.throughput.errorClient),
+                        errorServer: append(prev.dashboard.charts.throughput.errorServer, newTick.charts.throughput.errorServer),
+                        totalCount: newTick.charts.throughput.totalCount,
+                    },
+
+                    percentiles: {
+                        p50: append(prev.dashboard.charts.percentiles.p50, newTick.charts.percentiles.p50),
+                        p95: append(prev.dashboard.charts.percentiles.p95, newTick.charts.percentiles.p95),
+                        p99: append(prev.dashboard.charts.percentiles.p99, newTick.charts.percentiles.p99),
+                        totalCount: newTick.charts.percentiles.totalCount,
+                    },
+
+                    runtimePerformance: {
+                        heapUsage: append(prev.dashboard.charts.runtimePerformance.heapUsage, newTick.charts.runtimePerformance.heapUsage),
+                        heapSize: append(prev.dashboard.charts.runtimePerformance.heapSize, newTick.charts.runtimePerformance.heapSize),
+                        lag: append(prev.dashboard.charts.runtimePerformance.lag, newTick.charts.runtimePerformance.lag),
+                        totalCount: newTick.charts.runtimePerformance.totalCount,
+                    },
+                },
+            }
+        }));
+    }
+
     React.useEffect(() => {
         if (!isConnected) {
             cleanup();
@@ -103,6 +160,9 @@ export function MetricsProvider({
                     ...prev,
                     dashboard: dashboardData
                 }));
+            });
+            registerEventListener(WebSocketEvents.RESPONSE_DASHBOARD_TICK_DATA, dashboardTickData => {
+                appendTickData(dashboardTickData);
             });
             registerEventListener(WebSocketEvents.RESPONSE_ANALYTICS_DATA, analyticsData => {
                 if (haveFilters(filtersRef.current)) {

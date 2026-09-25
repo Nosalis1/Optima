@@ -67,7 +67,7 @@ function Filters({ settings, onChange }: { settings: AnalyticsFilterSettings; on
 }
 
 function Content({ data }: { data: AnalyticsData['endpointsTable'] }) {
-    const headers = ['#', 'Method', 'Route', 'Req Count', 'Avg Latency', 'P95', 'P99', 'Error Percentage'];
+    const headers = ['#', 'Method', 'Route', 'Req Count', 'Min Latency', 'Avg Latency', 'P95', 'P99', 'Error Percentage'];
     return (
         <Card padding>
             <div className="overflow-x-auto">
@@ -91,6 +91,7 @@ function Content({ data }: { data: AnalyticsData['endpointsTable'] }) {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{row.method}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{row.route}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{formatBigNumber(row.requestCount)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{row.minLatency?.toFixed(2)} ms</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{row.averageLatency?.toFixed(2)} ms</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{row.p95?.toFixed(2)} ms</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{row.p99?.toFixed(2)} ms</td>

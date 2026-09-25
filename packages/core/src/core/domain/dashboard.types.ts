@@ -1,23 +1,46 @@
-import type {
-    AlertMessage,
-    PaginationMeta
-} from './common.types';
-import type {
-    CpuMetrics,
-    MemoryMetrics,
-    EventLoopMetrics,
-    GCMetrics,
-    LibuvHandles,
-    HistoricTimeSeries
-} from './metrics.types';
-import type {
-    V8RuntimeInfo
-} from './system.types';
-import type {
-    EndpointTelemetry,
-    EndpointLatencyDistribution,
-    EndpointVolume
-} from './endpoints.types';
+import type { AlertMessage, PaginationMeta } from './common.types';
+import type { CpuMetrics, MemoryMetrics, EventLoopMetrics, GCMetrics, LibuvHandles, HistoricTimeSeries, HistoricTickSeries } from './metrics.types';
+import type { V8RuntimeInfo } from './system.types';
+import type { EndpointTelemetry, EndpointLatencyDistribution, EndpointVolume } from './endpoints.types';
+
+/**
+ * Represents the structure of chart data for the dashboard, including throughput, percentiles, and runtime performance metrics.
+ * @property {object} throughput - Throughput chart data, including requests per second (RPS), client and server error counts, and total count.
+ * @property {object} percentiles - Percentiles chart data, including P50, P95, P99 values and total count.
+ * @property {object} runtimePerformance - Runtime performance chart data, including heap usage, heap size, event loop lag, and total count.
+ * @property {T} throughput.rps - Requests per second (RPS) data for the throughput chart.
+ * @property {T} throughput.errorClient - Client error counts for the throughput chart.
+ * @property {T} throughput.errorServer - Server error counts for the throughput chart.
+ * @property {number} throughput.totalCount - Total count of data points for the throughput chart.
+ * @property {T} percentiles.p50 - P50 values for the percentiles chart.
+ * @property {T} percentiles.p95 - P95 values for the percentiles chart.
+ * @property {T} percentiles.p99 - P99 values for the percentiles chart.
+ * @property {number} percentiles.totalCount - Total count of data points for the percentiles chart.
+ * @property {T} runtimePerformance.heapUsage - Heap usage data for the runtime performance chart.
+ * @property {T} runtimePerformance.heapSize - Heap size data for the runtime performance chart.
+ * @property {T} runtimePerformance.lag - Event loop lag data for the runtime performance chart.
+ * @property {number} runtimePerformance.totalCount - Total count of data points for the runtime performance chart.
+ */
+interface DashboardChartData<T> {
+    throughput: {
+        rps: T;
+        errorClient: T;
+        errorServer: T;
+        totalCount: number;
+    };
+    percentiles: {
+        p50: T;
+        p95: T;
+        p99: T;
+        totalCount: number;
+    };
+    runtimePerformance: {
+        heapUsage: T;
+        heapSize: T;
+        lag: T;
+        totalCount: number;
+    };
+}
 
 /**
  * Represents the complete dashboard data structure, including current metrics, historical data, impacted endpoints, alerts, and chart configurations.
@@ -25,9 +48,7 @@ import type {
  * @property {HistoricTimeSeries} history - Historical time series data for various metrics.
  * @property {EndpointTelemetry[]} impactEndpoints - List of impacted endpoints with their telemetry data.
  * @property {AlertMessage[]} alerts - List of alert messages.
- * @property {object} charts - Explicit chart configuration maps matching chart configurations directly.
- * @property {object} charts.throughputAndLatency - Chart data for throughput and latency metrics.
- * @property {object} charts.runtimePerformance - Chart data for runtime performance metrics.
+ * @property {DashboardChartData} charts - Explicit chart configuration maps matching chart configurations directly.
  */
 export interface DashboardData {
     // Current instantaneous values
@@ -46,26 +67,28 @@ export interface DashboardData {
     alerts: AlertMessage[];
 
     // Explicit chart configuration maps matching chart configurations directly
-    charts: {
-        throughput: {
-            rps: number[];
-            errorClient: number[];
-            errorServer: number[];
-            totalCount: number;
-        },
-        percentiles: {
-            p50: number[];
-            p95: number[];
-            p99: number[];
-            totalCount: number;
-        };
-        runtimePerformance: {
-            heapUsage: number[];
-            heapSize: number[];
-            lag: number[];
-            totalCount: number;
-        };
-    };
+    charts: DashboardChartData<number[]>;
+}
+
+/**
+ * Represents the dashboard tick data structure, which includes current metrics, historical data, impacted endpoints, alerts, and chart configurations for a specific tick.
+ * @property {object} current - Current instantaneous values for various metrics.
+ * @property {HistoricTimeSeries} history - Historical time series data for various metrics.
+ * @property {EndpointTelemetry[]} impactEndpoints - List of impacted endpoints with their telemetry data.
+ * @property {AlertMessage[]} alerts - List of alert messages.
+ * @property {DashboardChartData} charts - Explicit chart configuration maps matching chart configurations directly.
+ */
+export interface DashboardTickData {
+    // Current instantaneous values
+    current: DashboardData['current'];
+
+    // Stream history arrays
+    history: HistoricTickSeries;
+    impactEndpoints: DashboardData['impactEndpoints'];
+    alerts: DashboardData['alerts'];
+
+    // Explicit chart configuration maps matching chart configurations directly
+    charts: DashboardChartData<number>;
 }
 
 /**

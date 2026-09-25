@@ -1,11 +1,9 @@
 "use client";
 import Grid, { type Padding, DEFAULT_PADDING } from "./utility/grid";
+import { getNiceScale } from "./utility/nice-scale";
 import { useSize } from "./utility/useSize";
 
-type Point = {
-    x: number;
-    y: number;
-}
+type Point = { x: number; y: number; }
 
 type Entry = {
     points: Point[];
@@ -23,7 +21,11 @@ type Props = {
     withDots?: boolean;
     rows?: number; // Optional: number of rows for the grid
     cols?: number; // Optional: number of columns for the grid
+    formatXLabel?: (value: number, idx: number) => string;
 }
+
+const defaultFormatXLabel = (value: number, idx: number): string => Number.isInteger(value) ? value.toString() : value.toFixed(1);
+const indexFormatXLabel = (value: number, idx: number): string => `${idx * 5}`;
 
 export default function LineGraph({
     data,
@@ -31,53 +33,55 @@ export default function LineGraph({
     defaultColor = "#3b82f6",
     defaultType = 'solid',
     withDots = true,
-    rows = 4,
-    cols = 5
+    rows = 6,
+    cols = 5,
+    formatXLabel = indexFormatXLabel,
 }: Props) {
-    const { width: chartWidth, height: chartHeight, isHydrated } = useSize();
+    const { width: chartWidth, height: chartHeight, isHydrated, ref } = useSize<HTMLDivElement>();
 
-    if (!data || data.length === 0
-        // || data.every((series) => series.points.length === 0)
-    ) {
-        return null;
+    if (!data || data.length === 0) {
+        return <div ref={ref} className="w-full h-full" />;
+    }
+
+    const allYValues = data.flatMap((series) => series.points.map((p) => p.y));
+    if (allYValues.length === 0) {
+        return <div ref={ref} className="w-full h-full" />;
     }
 
     const usableWidth = chartWidth - padding.left - padding.right;
     const usableHeight = chartHeight - padding.top - padding.bottom;
     const baselineY = chartHeight - padding.bottom;
 
-    const allYValues = data.flatMap((series) => series.points.map((p) => p.y));
     const rawMinY = Math.min(...allYValues);
     const rawMaxY = Math.max(...allYValues);
 
-    const minY = rawMinY === rawMaxY ? rawMinY - 1 : rawMinY;
-    const maxY = rawMinY === rawMaxY ? rawMaxY + 1 : rawMaxY;
+    const rowCount = rows;
+    const { min: minY, max: maxY, step: yStep } = getNiceScale(rawMinY, rawMaxY, rowCount);
     const yRange = maxY - minY;
 
     const longestSeries = data.reduce(
         (max, series) => (series.points.length > max.length ? series.points : max),
         [] as Point[]
     );
-    // const xAxisLabels = longestSeries.map((p) => p.x.toString());
-    const colCount = data[0].points.length / cols + 1;
-    const xAxisLabels = Array.from({ length: colCount }, (_, idx) => `${idx * cols}`);
-
-    const rowCount = rows;
-    const yAxisLabels = Array.from({ length: rowCount + 1 }, (_, i) => {
-        const value = minY + (i / rowCount) * yRange;
-        return Number.isInteger(value) ? value.toString() : value.toFixed(1);
-    });
 
     const allXValues = data.flatMap((series) => series.points.map((p) => p.x));
     const minX = Math.min(...allXValues);
     const maxX = Math.max(...allXValues);
     const xRange = maxX - minX || 1; // avoid division by zero
 
-    function getScaledPoints(points: Point[]) {
-        const totalPoints = points.length;
+    const colCount = Math.max(1, Math.ceil(longestSeries.length / cols));
+    const xAxisLabels = Array.from({ length: colCount + 1 }, (_, idx) => {
+        const value = minX + (idx / colCount) * xRange;
+        return formatXLabel(value, idx);
+    });
 
-        const mappedPoints = points.map((point) => {
-            // Time-based position (not index-based)
+    const yAxisLabels = Array.from({ length: rowCount + 1 }, (_, i) => {
+        const value = minY + (i / rowCount) * yRange;
+        return Number.isInteger(value) ? value.toString() : value.toFixed(1);
+    });
+
+    function getScaledPoints(points: Point[]) {
+        return points.map((point) => {
             const normalizedX = (point.x - minX) / xRange;
             const x = padding.left + normalizedX * usableWidth;
 
@@ -86,36 +90,11 @@ export default function LineGraph({
 
             return { x, y, raw: point };
         });
-        // const mappedPoints = points.map((point, index) => {
-        //     const ratioX = totalPoints > 1 ? index / (totalPoints - 1) : 0.5;
-        //     const x = padding.left + ratioX * usableWidth;
-
-        //     const normalizedY = (point.y - minY) / yRange;
-        //     const y = chartHeight - padding.bottom - normalizedY * usableHeight;
-
-        //     return { x, y, raw: point };
-        // });
-
-        const segments: Array<{ x: number, y: number, raw: Point }[]> = [];
-        let currentSegment: { x: number, y: number, raw: Point }[] = [];
-
-        mappedPoints.forEach((p) => {
-            if (p) {
-                currentSegment.push(p);
-            } else if (currentSegment.length > 0) {
-                segments.push(currentSegment);
-                currentSegment = [];
-            }
-        });
-        if (currentSegment.length > 0) {
-            segments.push(currentSegment);
-        }
-
-        return segments;
     }
 
     return (
         <Grid
+            ref={ref}
             isHydrated={isHydrated}
             chartWidth={chartWidth}
             chartHeight={chartHeight}
@@ -158,69 +137,67 @@ export default function LineGraph({
             </defs>
 
             {data.map((series, seriesIdx) => {
-                const segments = getScaledPoints(series.points);
+                if (series.points.length === 0) return null;
+
+                const points = getScaledPoints(series.points);
                 const strokeColor = series.color || defaultColor;
                 const lineStyle = series.type || defaultType;
-                const fillArea = series.fillArea ?? true; // Default to fill area
+                const fillArea = series.fillArea ?? true;
+
+                const linePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
+
+                const firstX = points[0].x;
+                const lastX = points[points.length - 1].x;
+                const areaPathD = [
+                    `M ${firstX},${baselineY}`,
+                    ...points.map((p) => `L ${p.x},${p.y}`),
+                    `L ${lastX},${baselineY}`,
+                    "Z",
+                ].join(" ");
 
                 return (
                     <g key={`series-${seriesIdx}`}>
-                        {segments.map((segment, segIdx) => {
-                            if (segment.length === 0) return null;
+                        {/* Area fill (gradient) */}
+                        {
+                            fillArea && points.length > 1 && (
+                                <path
+                                    d={areaPathD}
+                                    fill={`url(#area-gradient-${seriesIdx})`}
+                                    stroke="none"
+                                />
+                            )
+                        }
 
-                            const linePoints = segment.map((p) => `${p.x},${p.y}`).join(" ");
+                        {/* Line path */}
+                        {
+                            points.length > 1 ? (
+                                <polyline
+                                    fill="none"
+                                    stroke={strokeColor}
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeDasharray={lineStyle === 'dashed' ? "6,6" : undefined}
+                                    points={linePoints}
+                                />
+                            ) : null
+                        }
 
-                            // Build closed path for area fill:
-                            // Start at baseline below first point -> line to all points -> drop to baseline below last point -> close
-                            const firstX = segment[0].x;
-                            const lastX = segment[segment.length - 1].x;
-                            const areaPathD = [
-                                `M ${firstX},${baselineY}`,
-                                ...segment.map((p) => `L ${p.x},${p.y}`),
-                                `L ${lastX},${baselineY}`,
-                                "Z",
-                            ].join(" ");
-
-                            return (
-                                <g key={`segment-${segIdx}`}>
-                                    {/* 1. AREA FILL (GRADIENT) */}
-                                    {fillArea && segment.length > 1 && (
-                                        <path
-                                            d={areaPathD}
-                                            fill={`url(#area-gradient-${seriesIdx})`}
-                                            stroke="none"
-                                        />
-                                    )}
-
-                                    {/* 2. LINE PATH */}
-                                    {segment.length > 1 ? (
-                                        <polyline
-                                            fill="none"
-                                            stroke={strokeColor}
-                                            strokeWidth="2.5"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeDasharray={lineStyle === "dashed" ? "6,6" : undefined}
-                                            points={linePoints}
-                                        />
-                                    ) : null}
-
-                                    {/* 3. DATA POINTS */}
-                                    {withDots && segment.map((p, pointIdx) => (
-                                        <circle
-                                            key={`point-${segIdx}-${pointIdx}`}
-                                            cx={p.x}
-                                            cy={p.y}
-                                            r="4"
-                                            className="fill-brand-900 stroke-2 pointer-events-auto cursor-pointer"
-                                            stroke={strokeColor}
-                                        >
-                                            <title>{`X: ${p.raw.x}, Y: ${p.raw.y}`}</title>
-                                        </circle>
-                                    ))}
-                                </g>
-                            );
-                        })}
+                        {/* Data points */}
+                        {
+                            withDots && points.map((p, pointIdx) => (
+                                <circle
+                                    key={`point-${seriesIdx}-${pointIdx}`}
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r="4"
+                                    className="fill-brand-900 stroke-2 pointer-events-auto cursor-pointer"
+                                    stroke={strokeColor}
+                                >
+                                    <title>{`X: ${p.raw.x}, Y: ${p.raw.y}`}</title>
+                                </circle>
+                            ))
+                        }
                     </g>
                 );
             })}

@@ -22,7 +22,7 @@ export function Selection({ selected }: Props) {
         );
     }
 
-    const extractData = (key: keyof typeof selected.perHour[0]) => {
+    const extractData = (key: keyof typeof selected.perHour[0], reverse: boolean = false) => {
         let points: { x: number, y: number }[] = [];
 
         if (typeof selected.perHour[0][key] !== 'number') {
@@ -33,6 +33,18 @@ export function Selection({ selected }: Props) {
             points.push({ x: idx, y: hour[key] as number });
         });
 
+        if (points.length < 24) {
+            const lastX = points.length > 0 ? points[points.length - 1].x : -1;
+            for (let i = lastX + 1; i < 24; i++) {
+                points.push({ x: i, y: 0 });
+            }
+        }
+        if (reverse) {
+            points = points.map((point, idx) => ({
+                x: points.length - 1 - idx,
+                y: point.y,
+            }));
+        }
         return points;
     };
 
@@ -66,28 +78,28 @@ export function Selection({ selected }: Props) {
                 <LineGraph
                     data={[
                         {
-                            points: extractData('avgRps'),
+                            points: extractData('avgRps', true),
                             color: 'var(--color-accent)',
                             type: 'solid',
                             fillArea: false,
                             label: 'Average RPS'
                         },
                         {
-                            points: extractData('maxRps'),
+                            points: extractData('maxRps', true),
                             color: 'var(--chart-2)',
                             type: 'dashed',
                             fillArea: false,
                             label: 'Maximum RPS'
                         },
                         {
-                            points: extractData('clientErrorCount'),
+                            points: extractData('clientErrorCount', true),
                             color: 'var(--chart-4)',
                             type: 'solid',
                             fillArea: true,
                             label: 'Client Errors'
                         },
                         {
-                            points: extractData('serverErrorCount'),
+                            points: extractData('serverErrorCount', true),
                             color: 'var(--chart-5)',
                             type: 'solid',
                             fillArea: true,
@@ -96,6 +108,7 @@ export function Selection({ selected }: Props) {
                     ]}
                     rows={8}
                     cols={1}
+                    formatXLabel={(value, idx) => `${23 - idx}:00`}
                 />
             </Card>
 
@@ -149,14 +162,14 @@ export function Selection({ selected }: Props) {
                 <LineGraph
                     data={[
                         {
-                            points: extractData('avgLatency'),
+                            points: extractData('avgLatency', true),
                             color: 'var(--color-accent)',
                             type: 'solid',
                             fillArea: false,
                             label: 'Average Latency'
                         },
                         {
-                            points: extractData('maxLatency'),
+                            points: extractData('maxLatency', true),
                             color: 'var(--chart-2)',
                             type: 'dashed',
                             fillArea: false,
@@ -165,6 +178,7 @@ export function Selection({ selected }: Props) {
                     ]}
                     rows={8}
                     cols={1}
+                    formatXLabel={(value, idx) => `${23 - idx}:00`}
                 />
             </Card>
 

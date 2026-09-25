@@ -64,7 +64,7 @@ export default function GaugeGraph({
     unit = "",
     progressColor = "#3b82f6",
 }: Props) {
-    const { width: chartWidth, height: chartHeight, isHydrated } = useSize();
+    const { width: chartWidth, height: chartHeight, isHydrated, ref } = useSize();
 
     if (to <= from) return null;
 
@@ -88,7 +88,7 @@ export default function GaugeGraph({
     const progressEndAngle = startAngle + valueRatio * totalSpan;
 
     return (
-        <div className="relative w-full h-full p-4 flex flex-col items-center justify-center">
+        <div ref={ref} className="relative w-full h-full p-4 flex flex-col items-center justify-center">
             {isHydrated && (
                 <svg
                     className="w-full h-full overflow-visible"

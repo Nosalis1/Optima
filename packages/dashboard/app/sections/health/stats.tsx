@@ -12,7 +12,7 @@ type Props = {
 function HeadLabel({ title, value }: { title: string, value: string }) {
     return (
         <div className="flex flex-row justify-between h-full">
-            <span className="text-[10px] text-foreground uppercase tracking-wider font-semibold block mb-1">
+            <span className="text-[10px] text-foreground uppercase tracking-wider font-semibold block mb-1 truncate">
                 {title}
             </span>
             <span className="text-[10px] text-foreground-soft uppercase tracking-wider font-semibold block mb-1 ml-2">
@@ -33,14 +33,14 @@ export default function HealthStats({ data }: Props) {
     ];
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-            <Hero header={{ title: "CPU Per Core Utilization" }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            {/* <Hero header={{ title: "CPU Per Core Utilization" }}>
                 <HistogramGraph
                     data={data.cpu.perCoreUsage}
                     binCount={data.cpu.perCoreUsage.length}
                     label="CPU Usage (%)"
                 />
-            </Hero>
+            </Hero> */}
 
             <Hero header={{ title: "Garbage Collection" }}>
                 <HeroContent

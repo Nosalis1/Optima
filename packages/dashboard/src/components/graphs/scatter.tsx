@@ -27,7 +27,7 @@ export default function ScatterGraph({
     defaultColor = "#3b82f6",
     defaultRadius = 4
 }: Props) {
-    const { width: chartWidth, height: chartHeight, isHydrated } = useSize();
+    const { width: chartWidth, height: chartHeight, isHydrated, ref } = useSize();
 
     if (!data || data.length === 0 || data.every((series) => series.points.length === 0)) {
         return null;
@@ -78,6 +78,7 @@ export default function ScatterGraph({
 
     return (
         <Grid
+            ref={ref}
             isHydrated={isHydrated}
             chartWidth={chartWidth}
             chartHeight={chartHeight}

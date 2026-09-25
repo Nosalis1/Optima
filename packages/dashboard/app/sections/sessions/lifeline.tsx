@@ -1,6 +1,6 @@
 import { Card } from "@/app/components/cards/card";
-import { SelectableCard } from "@/app/components/cards/selectable-card";
 import type { SessionMetadata } from "../../domain";
+import React from "react";
 
 type Props = {
     sessions: SessionMetadata[];
@@ -8,12 +8,17 @@ type Props = {
     onSessionClick?: (sessionNumber: number) => void;
 };
 
+const PER_PAGE_COUNT = 10;
+
 export function Lifeline({ sessions, selectedSessionNumber, onSessionClick }: Props) {
+    const [page, setPage] = React.useState(0);
 
     if (!sessions || typeof sessions !== 'object' || !Array.isArray(sessions) || sessions.length === 0) {
         return null;
     }
-    
+
+    const finalSessions = sessions.slice(page * PER_PAGE_COUNT, (page + 1) * PER_PAGE_COUNT);
+
     return (
         <Card
             padding
@@ -23,13 +28,28 @@ export function Lifeline({ sessions, selectedSessionNumber, onSessionClick }: Pr
                 tooltip: "This section displays the history of sessions.",
             }}
         >
+            <button type="button" onClick={() => setPage((prev) => Math.max(prev - 1, 0))} disabled={page === 0}
+                className={`
+                        py-1 rounded-md w-full
+                        text-sm font-semibold
+                        bg-[var(--variant-4)]
+                        transition-all duration-200
+                        ${page === 0
+                        ? "bg-[var(--variant-5)] text-[var(--variant-1)] cursor-not-allowed"
+                        : "text-white cursor-pointer"
+                    }
+                    `}
+            >
+                Previous
+            </button>
+
             <div className="relative pl-2">
                 <div className="absolute left-[15px] top-7 bottom-7 w-px bg-[var(--variant-5)]" />
 
                 <div className="flex flex-col">
-                    {sessions.map((session, index) => {
+                    {finalSessions.map((session, index) => {
                         const isSelected = selectedSessionNumber === session.sessionNumber;
-                        const isLast = index === sessions.length - 1;
+                        const isLast = index === finalSessions.length - 1;
 
                         return (
                             <div key={session.sessionNumber} className="relative flex items-center min-h-12">
@@ -74,6 +94,21 @@ export function Lifeline({ sessions, selectedSessionNumber, onSessionClick }: Pr
                     })}
                 </div>
             </div>
+
+            <button type="button" onClick={() => setPage((prev) => prev + 1)} disabled={(page + 1) * PER_PAGE_COUNT >= sessions.length}
+                className={`
+                        mt-2 py-1 rounded-md w-full
+                        text-sm font-semibold
+                        bg-[var(--variant-4)]
+                        transition-all duration-200
+                        ${(page + 1) * PER_PAGE_COUNT >= sessions.length
+                        ? "bg-[var(--variant-5)] text-[var(--variant-1)] cursor-not-allowed"
+                        : "text-white cursor-pointer"
+                    }
+                    `}
+            >
+                Next
+            </button>
         </Card>
     );
 }

@@ -1,12 +1,8 @@
 import { Card } from '@/app/components/cards/card';
-import {
-    LineGraph
-} from '@/src/components/graphs';
+import { LineGraph } from '@/src/components/graphs';
 import { type HealthData } from '@/app/domain';
 
-type Props = {
-    data: HealthData;
-};
+type Props = { data: HealthData; };
 
 export default function HealthGraphs({ data }: Props) {
     return (

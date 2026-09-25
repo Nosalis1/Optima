@@ -1,11 +1,7 @@
 import type { PropsWithChildren } from "react";
+import React from "react";
 
-export type Padding = {
-    top: number;
-    right: number;
-    bottom: number;
-    left: number;
-};
+export type Padding = { top: number; right: number; bottom: number; left: number; };
 
 type Props = {
     isHydrated: boolean;
@@ -21,14 +17,9 @@ type Props = {
     renderLegend?: () => React.ReactNode;
 } & PropsWithChildren;
 
-export const DEFAULT_PADDING: Padding = {
-    top: 5,
-    right: 5,
-    bottom: 5,
-    left: 25,
-};
+export const DEFAULT_PADDING: Padding = { top: 5, right: 5, bottom: 5, left: 25 };
 
-export default function Grid({
+export const Grid = React.forwardRef<HTMLDivElement, Props>(function Grid({
     isHydrated,
     chartWidth,
     chartHeight,
@@ -41,7 +32,7 @@ export default function Grid({
     padding: userPadding,
     renderLegend,
     children,
-}: Props) {
+}, ref) {
     const padding: Padding = { ...DEFAULT_PADDING, ...userPadding };
 
     const usableWidth = chartWidth - padding.left - padding.right;
@@ -50,19 +41,15 @@ export default function Grid({
     function renderGrid() {
         const elements: React.JSX.Element[] = [];
 
-        // --- Y-AXIS & HORIZONTAL GRIDLINES ---
         for (let i = 0; i <= rows; i++) {
             const ratio = i / rows;
-            // Draw from bottom to top
             const y = chartHeight - padding.bottom - ratio * usableHeight;
 
-            // Compute label value dynamically (or use custom yAxisLabels if provided)
             let displayLabel: string;
             if (yAxisLabels && yAxisLabels[i] !== undefined) {
                 displayLabel = yAxisLabels[i];
             } else {
                 const calculatedValue = minY + ratio * (maxY - minY);
-                // Format decimals nicely if step values aren't whole numbers
                 displayLabel = Number.isInteger(calculatedValue)
                     ? calculatedValue.toString()
                     : calculatedValue.toFixed(2);
@@ -94,7 +81,6 @@ export default function Grid({
             );
         }
 
-        // --- X-AXIS & VERTICAL GRIDLINES ---
         for (let i = 0; i < cols; i++) {
             const ratio = cols > 1 ? i / (cols - 1) : 0;
             const x = padding.left + ratio * usableWidth;
@@ -141,6 +127,7 @@ export default function Grid({
                 </div>
             )}
             <div
+                ref={ref}
                 id="graph-root"
                 className="relative w-full h-full max-h-[300px]"
             >
@@ -157,4 +144,6 @@ export default function Grid({
             </div>
         </div>
     );
-}
+});
+
+export default Grid;

@@ -22,7 +22,7 @@ export default function BarChart({
     padding = DEFAULT_PADDING,
     defaultColor = "#3b82f6",
 }: Props) {
-    const { width: chartWidth, height: chartHeight, isHydrated } = useSize();
+    const { width: chartWidth, height: chartHeight, isHydrated, ref } = useSize();
 
     if (!categories || categories.length === 0 || !data || data.length === 0) {
         return null;
@@ -59,6 +59,7 @@ export default function BarChart({
 
     return (
         <Grid
+            ref={ref}
             isHydrated={isHydrated}
             chartWidth={chartWidth}
             chartHeight={chartHeight}

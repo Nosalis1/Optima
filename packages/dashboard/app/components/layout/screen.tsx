@@ -12,7 +12,7 @@ const Screen = ({
                 <Sidebar />
                 <div className="flex flex-col w-full h-full overflow-auto">
                     {children}
-                    <Footer />
+                    {/* <Footer /> */}
                 </div>
             </div>
         </div>

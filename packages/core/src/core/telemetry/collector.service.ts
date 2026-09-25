@@ -4,6 +4,7 @@ import type {
     DashboardData,
     HealthData,
     AnalyticsFilterSettings,
+    DashboardTickData,
 } from '../domain';
 import type { LocalRepository } from "../storage";
 import type { ReadonlyConfig } from '../../config';
@@ -45,6 +46,10 @@ export class CollectorService {
 
     getDashboardData(): DashboardData {
         return this.storage.dashboard.get();
+    }
+
+    getDashboardTickData(): DashboardTickData {
+        return this.storage.dashboard.getTickData();
     }
 
     getAnalyticsData(filters?: AnalyticsFilterSettings): AnalyticsData {

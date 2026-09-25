@@ -101,6 +101,32 @@ export interface LibuvHandles {
 
 /**
  * Represents historic time series data for various metrics, including requests per second (RPS), latency, error rate, event loop lag, heap usage, heap size, resident set size (RSS) memory, total heap memory, and optional percentiles (p95 and p99).
+ * @property {T} rps - Values of requests per second (RPS) values over time.
+ * @property {T} latency - Values of latency values over time.
+ * @property {T} errorRate - Values of error rate values over time.
+ * @property {T} eventLoopLag - Values of event loop lag values over time.
+ * @property {T} heapUsage - Values of heap usage values over time.
+ * @property {T} heapSize - Values of heap size values over time.
+ * @property {T} rssMemory - Values of resident set size (RSS) memory values over time.
+ * @property {T} totalHeap - Values of total heap memory values over time (from health memory breakdown).
+ * @property {T} p95 - Optional values of 95th percentile latency values over time.
+ * @property {T} p99 - Optional values of 99th percentile latency values over time.
+ */
+interface HistoricSeries<T> {
+    rps: T;
+    latency: T;
+    errorRate: T;
+    eventLoopLag: T;
+    heapUsage: T;
+    heapSize: T;
+    rssMemory: T;
+    totalHeap: T;
+    p95?: T;
+    p99?: T;
+}
+
+/**
+ * Represents historic time series data for various metrics, including requests per second (RPS), latency, error rate, event loop lag, heap usage, heap size, resident set size (RSS) memory, total heap memory, and optional percentiles (p95 and p99).
  * @property {number[]} rps - An array of requests per second (RPS) values over time.
  * @property {number[]} latency - An array of latency values over time.
  * @property {number[]} errorRate - An array of error rate values over time.
@@ -112,15 +138,19 @@ export interface LibuvHandles {
  * @property {number[]} [p95] - Optional array of 95th percentile latency values over time.
  * @property {number[]} [p99] - Optional array of 99th percentile latency values over time.
  */
-export interface HistoricTimeSeries {
-    rps: number[];
-    latency: number[];
-    errorRate: number[];
-    eventLoopLag: number[];
-    heapUsage: number[];
-    heapSize: number[];
-    rssMemory: number[];
-    totalHeap: number[]; // From health memory breakdown
-    p95?: number[];
-    p99?: number[];
-}
+export interface HistoricTimeSeries extends HistoricSeries<number[]> { }
+
+/**
+ * Represents historic tick series data for various metrics, including requests per second (RPS), latency, error rate, event loop lag, heap usage, heap size, resident set size (RSS) memory, total heap memory, and optional percentiles (p95 and p99).
+ * @property {number} rps - The requests per second (RPS) value at a specific tick.
+ * @property {number} latency - The latency value at a specific tick.
+ * @property {number} errorRate - The error rate value at a specific tick.
+ * @property {number} eventLoopLag - The event loop lag value at a specific tick.
+ * @property {number} heapUsage - The heap usage value at a specific tick.
+ * @property {number} heapSize - The heap size value at a specific tick.
+ * @property {number} rssMemory - The resident set size (RSS) memory value at a specific tick.
+ * @property {number} totalHeap - The total heap memory value at a specific tick (from health memory breakdown).
+ * @property {number} [p95] - Optional 95th percentile latency value at a specific tick.
+ * @property {number} [p99] - Optional 99th percentile latency value at a specific tick.
+ */
+export interface HistoricTickSeries extends HistoricSeries<number> { }

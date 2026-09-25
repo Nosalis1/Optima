@@ -5,6 +5,7 @@ import type {
     SystemStaticInfo,
     AnalyticsData,
     DashboardData,
+    DashboardTickData,
     HealthData,
     SessionMetadata,
     SessionManifest,
@@ -18,6 +19,7 @@ import {
 export interface MetricsDataProvider {
     getSystemStaticInfo(): SystemStaticInfo;
     getDashboardData(): DashboardData;
+    getDashboardTickData(): DashboardTickData;
     getAnalyticsData(filters?: AnalyticsFilterSettings): AnalyticsData;
     getHealthData(): HealthData;
 }
@@ -31,6 +33,7 @@ export interface SessionDataProvider {
 type MetricsPublishedData = {
     systemStaticInfo: SystemStaticInfo;
     dashboardData: DashboardData;
+    dashboardTickData: DashboardTickData;
     analyticsData: AnalyticsData;
     healthData: HealthData;
 } | null;
@@ -48,19 +51,18 @@ export class MetricsPublisher {
         this.publishData = {
             systemStaticInfo: this.provider.getSystemStaticInfo(),
             dashboardData: this.provider.getDashboardData(),
+            dashboardTickData: this.provider.getDashboardTickData(),
             analyticsData: this.provider.getAnalyticsData(),
             healthData: this.provider.getHealthData(),
         };
+
 
         //? consider sending only the changed data instead of sending all data every time
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_SYSTEM_DATA,
             this.publishData.systemStaticInfo
         );
-        this.websocket.broadcast(
-            WebSocketEvents.RESPONSE_DASHBOARD_DATA,
-            this.publishData.dashboardData
-        );
+        this.websocket.broadcast(WebSocketEvents.RESPONSE_DASHBOARD_TICK_DATA, this.publishData.dashboardTickData);
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_ANALYTICS_DATA,
             this.publishData.analyticsData

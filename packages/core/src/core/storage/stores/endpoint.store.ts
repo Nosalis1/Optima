@@ -13,6 +13,7 @@ interface EndpointRecord {
     rps: number;
     errorCount: number;
     totalLatency: number;
+    minLatency: number;
     histogram: Histogram;
     lastRequestAt: number;
 }
@@ -40,6 +41,7 @@ class EndpointStore {
                 requestCount: 0,
                 errorCount: 0,
                 totalLatency: 0,
+                minLatency: input.duration,
                 histogram: new Histogram(),
                 lastRequestAt: Date.now(),
                 rps: 0,
@@ -52,6 +54,7 @@ class EndpointStore {
 
         endpoint.requestCount++;
         endpoint.totalLatency += input.duration;
+        endpoint.minLatency = Math.min(endpoint.minLatency, input.duration);
         endpoint.lastRequestAt = Date.now();
         endpoint.histogram.record(input.duration);
 
@@ -86,6 +89,7 @@ class EndpointStore {
             rps: endpoint.rps,
             requestCount: endpoint.requestCount,
             averageLatency: endpoint.requestCount === 0 ? 0 : endpoint.totalLatency / endpoint.requestCount,
+            minLatency: endpoint.minLatency,
             p95: histogram.p95,
             p99: histogram.p99,
             errorRate: endpoint.requestCount === 0 ? 0 : endpoint.errorCount / endpoint.requestCount,

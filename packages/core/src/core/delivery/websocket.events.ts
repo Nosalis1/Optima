@@ -13,6 +13,7 @@ export enum WebSocketEvents {
 
     REQUEST_DASHBOARD_DATA = "request-dashboard-data",
     RESPONSE_DASHBOARD_DATA = "response-dashboard-data",
+    RESPONSE_DASHBOARD_TICK_DATA = "response-dashboard-tick-data",
 
     REQUEST_ANALYTICS_DATA = "request-analytics-data",
     RESPONSE_ANALYTICS_DATA = "response-analytics-data",

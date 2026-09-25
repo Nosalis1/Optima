@@ -57,16 +57,19 @@ export interface LibuvHandles {
     fileDescriptors: number;
 }
 
-// Aggregated Historic Profiles
-export interface HistoricTimeSeries {
-    rps: number[];
-    latency: number[];
-    errorRate: number[];
-    eventLoopLag: number[];
-    heapUsage: number[];
-    heapSize: number[];
-    rssMemory: number[];
-    totalHeap: number[]; // From health memory breakdown
-    p95?: number[];
-    p99?: number[];
+interface HistoricSeries<T> {
+    rps: T;
+    latency: T;
+    errorRate: T;
+    eventLoopLag: T;
+    heapUsage: T;
+    heapSize: T;
+    rssMemory: T;
+    totalHeap: T;
+    p95?: T;
+    p99?: T;
 }
+
+// Aggregated Historic Profiles
+export interface HistoricTimeSeries extends HistoricSeries<number[]> { }
+export interface HistoricTickSeries extends HistoricSeries<number> { }

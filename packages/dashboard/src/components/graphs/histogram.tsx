@@ -29,7 +29,7 @@ export default function Histogram({
     rows = 5,
     cols = binCount,
 }: Props) {
-    const { width: chartWidth, height: chartHeight, isHydrated } = useSize();
+    const { width: chartWidth, height: chartHeight, isHydrated, ref } = useSize();
 
     if (!data || data.length === 0) {
         return null;
@@ -86,6 +86,7 @@ export default function Histogram({
 
     return (
         <Grid
+            ref={ref}
             isHydrated={isHydrated}
             chartWidth={chartWidth}
             chartHeight={chartHeight}
@@ -136,7 +137,6 @@ export default function Histogram({
                     </g>
                 );
             })}
-
         </Grid>
     );
 }
