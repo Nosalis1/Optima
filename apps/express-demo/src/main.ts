@@ -60,20 +60,28 @@ const server = app.listen(3000, () => {
 });
 
 const stopMetrics = optima.attachServer(server);
-
 const stopTestCase = testCaseService.start();
 
+let shutdownPromise: Promise<void> | null = null;
+
 async function shutdown() {
-    console.log('Shutting down gracefully...');
-    stopTestCase();
-    await stopMetrics();
+    if (shutdownPromise) {
+        console.log('Shutdown already in progress. Please wait...');
+        return shutdownPromise;
+    }
 
-    testCaseService.compareTestRuns();
-
-    server.close(() => {
-        console.log('Server closed.');
-        process.exit(0);
-    });
+    shutdownPromise = (async () => {
+        console.log('Shutting down the server and metrics...');
+        await stopMetrics();
+        await stopTestCase();
+        testCaseService.compareTestRuns();
+        server.close(() => {
+            console.log('Server closed.');
+            process.exit(0);
+        });
+        console.log('Shutdown complete.');
+    })();
+    return shutdownPromise;
 }
 
 // setTimeout(() => {

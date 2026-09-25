@@ -10,12 +10,13 @@ import { NestWebSocketAdapter } from './metrics-websocket.adapter';
 import { type ReadonlyConfig } from '../config';
 import Logger from '../core/telemetry/logger';
 import { ApplicationEventManager, IntervalManager } from '../core/organizers';
-import { createOptimaRuntime, type OptimaRuntimeDependencies } from '../runtime';
+import { type OptimaRuntimeDependencies } from '../runtime';
 
 @Injectable()
 export class MetricsBootstrapService
     implements OnApplicationBootstrap, OnApplicationShutdown {
 
+    private started: boolean = false;
     private simulator: TrafficSimulator | null = null;
     private publisher: MetricsPublisher | null = null;
     private intervalManager: IntervalManager | null = null;
@@ -30,6 +31,9 @@ export class MetricsBootstrapService
     ) { }
 
     onApplicationBootstrap(): void {
+        if (this.started) { return; }
+        this.started = true;
+
         if (!this.dependencies) {
             Logger.error('Failed to create Optima runtime dependencies.');
             return;
@@ -74,6 +78,9 @@ export class MetricsBootstrapService
     }
 
     async onApplicationShutdown(): Promise<void> {
+        if (!this.started) { return; }
+        this.started = false;
+
         await ApplicationEventManager.instance?.emit({
             type: 'SHUTDOWN',
             reason: 'Nest metrics module shutting down',

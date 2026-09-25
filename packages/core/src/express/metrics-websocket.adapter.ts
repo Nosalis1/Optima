@@ -19,6 +19,7 @@ import Logger from '../core/telemetry/logger';
 
 export class ExpressWebSocketAdapter implements WebSocketAdapter {
     private io?: SocketIOServer;
+    private isClosed = false;
 
     constructor(
         private readonly server: HTTPServer,
@@ -51,6 +52,7 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
                 },
             },
         );
+        this.isClosed = false;
         Logger.debug('WebSocket server initialized successfully.');
 
         this.setupEvents();
@@ -173,7 +175,13 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
     }
 
     disconnect(): void {
+        if (this.isClosed) return;
+
+        this.isClosed = true;
+
+        this.io?.disconnectSockets(true);
         this.io?.close();
+
         this.io = undefined;
     }
 }

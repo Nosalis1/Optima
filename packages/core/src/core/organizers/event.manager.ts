@@ -23,13 +23,13 @@ export class ApplicationEventManager {
 
     start() {
         if (this.initilized) return;
+        this.initilized = true;
         this.on((event) => this.persistence.onApplicationEvent(event));
         this.on(async (event) => {
             if (event.type === 'SHUTDOWN') {
                 await this.persistence.shutdown();
             }
         });
-        this.initilized = true;
     }
 
     stop() {

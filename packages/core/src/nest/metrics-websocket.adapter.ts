@@ -152,6 +152,7 @@ export class NestWebSocketAdapter
     }
 
     disconnect(): void {
+        if (!this.server) return;
         this.server?.disconnectSockets(true);
     }
 }

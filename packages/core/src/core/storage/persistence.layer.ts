@@ -1,5 +1,5 @@
 import path from "path";
-import type { ReadonlyConfig } from "../../config";
+import { ReadonlyConfig } from "../../config";
 import {
     constructFilePath,
     appendRecordsAsync,
@@ -67,6 +67,8 @@ export class PersistenceRepository {
 
     private sessionMeta: SessionMetadata | null = null;
     private readonly manifestPath: string;
+
+    private shutdownPromise: Promise<void> | null = null;
 
     constructor(
         private readonly config: ReadonlyConfig
@@ -362,33 +364,38 @@ export class PersistenceRepository {
 
     async shutdown(): Promise<void> {
         if (!this.enabled) return;
+        if (this.shutdownPromise) return this.shutdownPromise;
 
-        Logger.debug('PersistenceLayer: Shutdown initiated. Flushing buffers and updating session manifest.');
+        this.shutdownPromise = (async () => {
+            Logger.debug('PersistenceLayer: Shutdown initiated. Flushing buffers and updating session manifest.');
 
-        try {
-            const manifest = await this.readManifest();
-            if (!Array.isArray(manifest.sessionHistory)) {
-                manifest.sessionHistory = [];
+            try {
+                const manifest = await this.readManifest();
+                if (!Array.isArray(manifest.sessionHistory)) {
+                    manifest.sessionHistory = [];
+                }
+                manifest.lastShutdownAt = new Date().toISOString();
+                manifest.sessionHistory.push({
+                    sessionNumber: this.sessionMeta?.sessionNumber ?? 0,
+                    recoveredFromCrash: this.sessionMeta?.recoveredFromCrash ?? false,
+                    startedAt: this.sessionMeta?.startedAt ?? '',
+                    endedAt: manifest.lastShutdownAt
+                });
+                await writeJSONAtomic(this.manifestPath, manifest);
+                await this.flushHttpBuffer();
+                Logger.debug('PersistenceLayer: Session manifest updated and HTTP buffer flushed.');
+
+                const removed = await cleanupOrphanedTempFiles(this.baseDir);
+                if (removed > 0) {
+                    Logger.debug(`PersistenceLayer: Removed ${removed} orphaned temporary files during initialization.`);
+                }
+
+            } catch (err) {
+                Logger.error("Error during persistence shutdown:", err);
             }
-            manifest.lastShutdownAt = new Date().toISOString();
-            manifest.sessionHistory.push({
-                sessionNumber: this.sessionMeta?.sessionNumber ?? 0,
-                recoveredFromCrash: this.sessionMeta?.recoveredFromCrash ?? false,
-                startedAt: this.sessionMeta?.startedAt ?? '',
-                endedAt: manifest.lastShutdownAt
-            });
-            await writeJSONAtomic(this.manifestPath, manifest);
-            await this.flushHttpBuffer();
-            Logger.debug('PersistenceLayer: Session manifest updated and HTTP buffer flushed.');
+        })();
 
-            const removed = await cleanupOrphanedTempFiles(this.baseDir);
-            if (removed > 0) {
-                Logger.debug(`PersistenceLayer: Removed ${removed} orphaned temporary files during initialization.`);
-            }
-
-        } catch (err) {
-            Logger.error("Error during persistence shutdown:", err);
-        }
+        return this.shutdownPromise;
     }
 
     //#endregion

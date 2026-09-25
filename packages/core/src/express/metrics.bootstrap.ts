@@ -7,7 +7,12 @@ import Logger from '../core/telemetry/logger';
 import { IntervalManager, ApplicationEventManager } from '../core/organizers';
 import type { OptimaRuntimeDependencies } from '../runtime';
 
+let started = false;
+
 export function expressMetricsBootstrap(server: HTTPServer, dependencies: OptimaRuntimeDependencies): () => Promise<void> {
+    if (started) return async () => { /* No-op */ };
+    started = true;
+
     const config = getConfig();
 
     let simulator: TrafficSimulator | null = null;
@@ -53,18 +58,21 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
         reason: 'Express metrics module initialized',
     });
 
-    return async () => {
+    const stop = async () => {
+        Logger.debug('Metrics bootstrap shutdown initiated.');
+
         await ApplicationEventManager.instance?.emit({
             type: 'SHUTDOWN',
             reason: 'Express metrics module shutting down',
         });
 
         intervalManager.stopIntervals();
-
         eventManager.stop();
-
         simulator?.stop();
-
         websocket.disconnect();
+
+        started = false;
     };
+
+    return stop;
 }
