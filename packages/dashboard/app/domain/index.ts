@@ -4,3 +4,4 @@ export * from './metrics.types';
 export * from './endpoints.types';
 export * from './dashboard.types';
 export * from './session.types';
+export * from './correlation.types';

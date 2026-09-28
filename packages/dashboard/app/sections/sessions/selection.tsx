@@ -108,7 +108,7 @@ export function Selection({ selected }: Props) {
                     ]}
                     rows={8}
                     cols={1}
-                    formatXLabel={(value, idx) => `${23 - idx}:00`}
+                    formatXLabel={(value, idx) => `${24 - idx}:00`}
                 />
             </Card>
 
@@ -178,7 +178,7 @@ export function Selection({ selected }: Props) {
                     ]}
                     rows={8}
                     cols={1}
-                    formatXLabel={(value, idx) => `${23 - idx}:00`}
+                    formatXLabel={(value, idx) => `${24 - idx}:00`}
                 />
             </Card>
 

@@ -6,6 +6,7 @@ import {
 } from "./connection.context";
 import type {
     AnalyticsData,
+    CorrelationData,
     DashboardData,
     DashboardTickData,
     HealthData,
@@ -14,7 +15,7 @@ import type {
     SystemStaticInfo,
     SystemStatus,
 } from '../domain';
-import { mockDashboardData, mockAnalyticsData, mockHealthData, mockSessionData, mockSessionSummary } from '../components/utility/mocking';
+import { mockDashboardData, mockAnalyticsData, mockHealthData, mockSessionData, mockCorrelationData } from '../components/utility/mocking';
 
 const MetricsContext = React.createContext<{
     data: MetricsData;
@@ -33,6 +34,7 @@ export type MetricsData = {
     dashboard: DashboardData;
     analytics: AnalyticsData;
     health: HealthData;
+    correlation: CorrelationData;
 }
 
 export type AnalyticsFilterSettings = {
@@ -61,6 +63,7 @@ export function MetricsProvider({
         dashboard: mockDashboardData(),
         analytics: mockAnalyticsData(),
         health: mockHealthData(),
+        correlation: mockCorrelationData()
     });
     const [filters, setFilters] = React.useState<AnalyticsFilterSettings>({
         query: '',
@@ -189,11 +192,18 @@ export function MetricsProvider({
                     health: healthData
                 }));
             });
+            registerEventListener(WebSocketEvents.RESPONSE_CORRELATION_DATA, correlationData => {
+                setData(prev => ({
+                    ...prev,
+                    correlation: correlationData
+                }));
+            });
 
             emit(WebSocketEvents.REQUEST_SYSTEM_DATA, null);
             emit(WebSocketEvents.REQUEST_DASHBOARD_DATA, null);
             emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, null);
             emit(WebSocketEvents.REQUEST_HEALTH_DATA, null);
+            emit(WebSocketEvents.REQUEST_CORRELATION_DATA, null);
             emit(WebSocketEvents.REQUEST_SESSION_METADATA, null);
         } catch (error) {
             console.error("Error fetching system status:", error);

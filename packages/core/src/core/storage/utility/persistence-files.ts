@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { writeChecksum, archiveFile } from "./file-buffer";
 
-export type PersistenceCategory = 'http_requests' | 'system_health' | 'events';
+export type PersistenceCategory = 'http_requests' | 'system_health' | 'events' | 'correlation';
 
 export async function resolveExistingFile(
     baseDir: string,

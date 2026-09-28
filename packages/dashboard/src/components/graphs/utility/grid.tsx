@@ -81,8 +81,8 @@ export const Grid = React.forwardRef<HTMLDivElement, Props>(function Grid({
             );
         }
 
-        for (let i = 0; i < cols; i++) {
-            const ratio = cols > 1 ? i / (cols - 1) : 0;
+        for (let i = 0; i <= cols; i++) {
+            const ratio = cols > 1 ? i / (cols) : 0;
             const x = padding.left + ratio * usableWidth;
 
             elements.push(

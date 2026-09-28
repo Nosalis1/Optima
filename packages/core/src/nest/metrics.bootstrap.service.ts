@@ -59,6 +59,7 @@ export class MetricsBootstrapService
         this.publisher = new MetricsPublisher(
             this.dependencies.collector,
             this.dependencies.persistence,
+            this.dependencies.correlation,
             this.websocket,
         );
 

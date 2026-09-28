@@ -76,6 +76,12 @@ describe('Statistics Utility Functions', () => {
         expect(Statistics.calculateSampleSizeProportion(0.1, 0.95)).toBe(97);
     });
 
+    test('calculateSampleSizeCorrelation calculates the correct sample size for correlation', () => {
+        expect(Statistics.calculateSampleSizeCorrelation(0.3, 0.05, 0.8)).toBe(85);
+        expect(Statistics.calculateSampleSizeCorrelation(0.5, 0.01, 0.9)).toBe(53);
+        expect(Statistics.calculateSampleSizeCorrelation(0.1, 0.05, 0.8)).toBe(783);
+    });
+
     test('pearsonCorrelation calculates the correct correlation coefficient', () => {
         const x = [1, 2, 3, 4, 5];
         const y = [2, 4, 6, 8, 10]; // Perfect positive correlation
@@ -190,5 +196,52 @@ describe('Statistics Utility Functions', () => {
         expect(Statistics.isDataAnomalyHistogram(8, totalCount, totalSum, totalSumOfSquares)).toBe(true);
         expect(Statistics.isDataAnomalyHistogram(12, 0, 0, 0)).toBe(false); // Edge case: empty histogram
         expect(Statistics.isDataAnomalyHistogram(12, 3, 36, 432)).toBe(false); // Edge case: zero standard deviation
+    });
+
+    test('linearDetrend removes linear trend from data', () => {
+        const data = [1, 2, 3, 4, 5];
+        const detrended = Statistics.linearDetrend(data);
+        expect(detrended).toEqual([0, 0, 0, 0, 0]);
+        expect(Statistics.linearDetrend([])).toEqual([]); // Edge case: empty array
+    });
+
+    test('difference calculates the first differences of a series', () => {
+        const data = [1, 2, 4, 7, 11];
+        expect(Statistics.difference(data)).toEqual([1, 2, 3, 4]);
+        expect(Statistics.difference([])).toEqual([]); // Edge case: empty array
+        expect(Statistics.difference([5])).toEqual([]); // Edge case: single element
+    });
+
+    test('autocorrelation calculates the correct autocorrelation', () => {
+        const data = [1, 2, 3, 4, 5];
+        expect(Statistics.autocorrelation(data, 2)).toBeCloseTo(-0.1);
+        expect(Statistics.autocorrelation(data)).toBeCloseTo(0.4);
+        expect(Statistics.autocorrelation([], 1)).toBe(0); // Edge case: empty array
+        expect(Statistics.autocorrelation([5], 1)).toBe(0); // Edge case: single element
+    });
+
+    test('effectiveSampleSize calculates the correct effective sample size', () => {
+        expect(Statistics.effectiveSampleSize(100, 0.5, 0.5)).toBeCloseTo(60.0, 1);
+        expect(Statistics.effectiveSampleSize(50, 0.1, 0.1)).toBeCloseTo(49.0, 1);
+        expect(Statistics.effectiveSampleSize(0, 0.5, 0.5)).toBe(0); // Edge case: zero sample size
+    });
+
+    test('laggedCorrelation finds the correct lag with maximum correlation', () => {
+        const x = [1, 2, 3, 4, 5];
+        const y = [0, 1, 2, 3, 4];
+        const result = Statistics.laggedCorrelation(x, y, 2);
+        expect(result.lag).toBe(0);
+        expect(result.r).toBeCloseTo(1);
+
+        const yNegative = [5, 4, 3, 2, 1]; // Perfect negative correlation
+        const negativeResult = Statistics.laggedCorrelation(x, yNegative, 2);
+        expect(negativeResult.lag).toBe(0);
+        expect(negativeResult.r).toBeCloseTo(-1);
+
+        const emptyX: number[] = [];
+        const emptyY: number[] = [];
+        const emptyResult = Statistics.laggedCorrelation(emptyX, emptyY, 2);
+        expect(emptyResult.lag).toBe(0);
+        expect(emptyResult.r).toBe(0); // Edge case: empty arrays
     });
 });

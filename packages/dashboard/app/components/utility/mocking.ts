@@ -1,5 +1,6 @@
 import type {
     AnalyticsData,
+    CorrelationData,
     DashboardData,
     HealthData,
     SessionMetadata,
@@ -326,5 +327,45 @@ export function mockSessionSummary(sessionNumber: number): SessionSummary {
         maxLatency: 500,
         sampleCount: 10000,
         perHour: generateDummyHours(24)
+    }
+}
+
+export function mockCorrelationData(): CorrelationData {
+    return {
+        results: [
+            {
+                id: '1',
+                xLabel: 'CPU Usage',
+                yLabel: 'Heap Usage',
+                expectedDirection: 'POSITIVE',
+                unexpectedDirection: false,
+                analysis: {
+                    status: 'STRONG_LINEAR_ASSOCIATION',
+                    direction: 'POSITIVE',
+                    pearsonR: 0.85,
+                    spearmanR: 0.82,
+                    rawPearsonR: 0.85,
+                    differencePearsonR: 0.03,
+                    determination: 0.72,
+                    lag: 0,
+                    laggedPearsonR: 0.85,
+                    sampleSize: 100,
+                    effectiveSampleSize: 95,
+                    requiredSampleSize: 80,
+                    autocorrelationX: 0.1,
+                    autocorrelationY: 0.15,
+                    trendDriven: false,
+                    recommendation: 'Monitor CPU and Heap usage closely for potential performance issues.'
+                }
+            }
+        ],
+        assessment: {
+            status: 'POSSIBLE_SATURATION',
+            evidence: [
+                'Strong positive correlation between CPU usage and Heap usage.',
+                'High determination coefficient indicates a significant relationship.'
+            ],
+            recommendation: 'Investigate the application\'s memory management and optimize resource usage to prevent potential saturation.'
+        }
     }
 }

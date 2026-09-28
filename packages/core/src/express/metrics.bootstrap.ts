@@ -27,7 +27,8 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
     const websocket = new ExpressWebSocketAdapter(
         server,
         dependencies.collector,
-        dependencies.persistence
+        dependencies.persistence,
+        dependencies.correlation
     );
 
     websocket.init();
@@ -41,6 +42,7 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
     const publisher = new MetricsPublisher(
         dependencies.collector,
         dependencies.persistence,
+        dependencies.correlation,
         websocket
     );
 

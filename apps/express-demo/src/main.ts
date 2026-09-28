@@ -19,7 +19,7 @@ const optima = setupOptima(app, {
     dashboardPath: '/optima-metrics',
     simulation: {
         intervalMs: 200,
-        requestsPerTick: 25,
+        requestsPerTick: 250,
     },
     publisher: {
         intervalMs: 1000,

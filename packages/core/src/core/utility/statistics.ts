@@ -4,9 +4,7 @@
  * @param value The value to be hashed. It can be of any type that can be serialized to JSON.
  * @returns The hash code for the given value.
  */
-export function hash(
-    value: NonNullable<unknown>
-): number {
+export function hash(value: NonNullable<unknown>): number {
     const str = JSON.stringify(value);
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -23,10 +21,7 @@ export function hash(
  * @param total The total number of items.
  * @returns The rate as a percentage.
  */
-export function rate(
-    accounted: number,
-    total: number
-): number {
+export function rate(accounted: number, total: number): number {
     if (total === 0) return 0;
     return (accounted / total) * 100;
 }
@@ -36,9 +31,7 @@ export function rate(
  * @param data - An array of numbers representing the dataset.
  * @returns The mean of the dataset.
  */
-export function mean(
-    data: number[]
-): number {
+export function mean(data: number[]): number {
     if (data.length === 0) return 0;
     const sum = data.reduce((acc, val) => acc + val, 0);
     return sum / data.length;
@@ -50,10 +43,7 @@ export function mean(
  * @param percentile - The desired percentile (between 0 and 1, e.g., 0.95 for p95).
  * @returns The value at the specified percentile of the dataset.
  */
-export function percentile(
-    data: number[],
-    percentile: number
-): number {
+export function percentile(data: number[], percentile: number): number {
     if (data.length === 0) return 0;
     if (percentile >= 1) return Math.max(...data);
     else if (percentile <= 0) return Math.min(...data);
@@ -77,12 +67,7 @@ export function percentile(
  * @param limits An array of upper limits for each histogram bucket, corresponding to the counters.
  * @returns The value at the specified percentile of the histogram.
  */
-export function percentileHistogram(
-    counters: Uint32Array,
-    totalCount: number,
-    percentile: number,
-    limits: number[]
-): number {
+export function percentileHistogram(counters: Uint32Array, totalCount: number, percentile: number, limits: number[]): number {
     if (totalCount === 0) return 0;
     if (percentile >= 1) {
         const last = limits[limits.length - 1];
@@ -122,9 +107,7 @@ export function percentileHistogram(
  * @param data - An array of numbers representing the dataset.
  * @returns The median of the dataset.
  */
-export function median(
-    data: number[]
-): number {
+export function median(data: number[]): number {
     if (data.length === 0) return 0;
     const sorted = [...data].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
@@ -158,15 +141,33 @@ function normsinv(p: number): number {
  * @param confidenceLevel The desired confidence level (default is 0.95 for 95% confidence).
  * @returns The required sample size to achieve the specified margin of error and confidence level.
  */
-export function calculateSampleSizeProportion(
-    marginOfError: number,
-    confidenceLevel: number = 0.95,
-): number {
+export function calculateSampleSizeProportion(marginOfError: number, confidenceLevel: number = 0.95): number {
     const alpha = 1 - confidenceLevel;
     const z = normsinv(1 - (alpha / 2));
     const p = 0.5;
     const n = (Math.pow(z, 2) * p * (1 - p)) / Math.pow(marginOfError, 2);
     return Math.ceil(n);
+}
+
+/**
+ * Calculates the number of INDEPENDENT observations needed to detect a correlation of at least
+ * `minCorrelation` with a two-sided test at significance level `alpha` and statistical power `power`.
+ * @param minCorrelation The smallest |r| worth detecting, in the open interval (0, 1). The sign is ignored.
+ * @param alpha Type I error probability (default 0.05).
+ * @param power Probability of detecting a true correlation of `minCorrelation` (default 0.80).
+ * @returns The required number of independent observations.
+ * @throws RangeError if any argument is outside its valid range.
+ */
+export function calculateSampleSizeCorrelation(minCorrelation: number, alpha: number = 0.05, power: number = 0.8): number {
+    const r = Math.abs(minCorrelation);
+    if (!(r > 0 && r < 1)) throw new RangeError('minCorrelation must be in the open interval (0, 1)');
+    if (!(alpha > 0 && alpha < 1)) throw new RangeError('alpha must be in the open interval (0, 1)');
+    if (!(power > 0 && power < 1)) throw new RangeError('power must be in the open interval (0, 1)');
+
+    const fisherZ = 0.5 * Math.log((1 + r) / (1 - r));
+    const zSum = normsinv(1 - alpha / 2) + normsinv(power);
+
+    return Math.ceil((zSum / fisherZ) ** 2 + 3);
 }
 
 /**
@@ -182,10 +183,7 @@ export function calculateSampleSizeProportion(
  * @param y The second dataset (Y values) as an array of numbers.
  * @returns The Pearson correlation coefficient (r).
  */
-export function pearsonCorrelation(
-    x: number[],
-    y: number[]
-): number {
+export function pearsonCorrelation(x: number[], y: number[]): number {
     if (x.length !== y.length || x.length === 0) return 0;
 
     const n = x.length;
@@ -242,10 +240,7 @@ function getRanks(arr: number[]): number[] {
  * @param y An array of numbers representing the second dataset.
  * @returns The Spearman rank correlation coefficient (ρ).
  */
-export function spearmanCorrelation(
-    x: number[],
-    y: number[]
-): number {
+export function spearmanCorrelation(x: number[], y: number[]): number {
     if (x.length !== y.length || x.length === 0) return 0;
 
     const n = x.length;
@@ -282,9 +277,7 @@ export function spearmanCorrelation(
  * @param pearsonR The Pearson correlation coefficient (r) between two datasets.
  * @returns An object containing the coefficient of determination (R²) and the coefficient of alienation (1 - R²).
  */
-export function determinationAndAlienation(
-    pearsonR: number
-): { determination: number, alienation: number } {
+export function determinationAndAlienation(pearsonR: number): { determination: number, alienation: number } {
     const determination = pearsonR * pearsonR;
     const alienation = 1 - determination;
     return { determination, alienation };
@@ -296,9 +289,7 @@ export function determinationAndAlienation(
  * @param data An array of numbers representing the dataset.
  * @returns The standard deviation of the dataset.
  */
-export function standardDeviation(
-    data: number[]
-): number {
+export function standardDeviation(data: number[]): number {
     if (data.length === 0) return 0;
 
     const mu = mean(data);
@@ -316,11 +307,7 @@ export function standardDeviation(
  * @param totalSumOfSquares The total sum of squares of all values across the histogram buckets.
  * @returns The standard deviation of the histogram data.
  */
-export function standardDeviationHistogram(
-    totalCount: number,
-    totalSum: number,
-    totalSumOfSquares: number
-): number {
+export function standardDeviationHistogram(totalCount: number, totalSum: number, totalSumOfSquares: number): number {
     if (totalCount === 0) return 0;
 
     const mean = totalSum / totalCount;
@@ -337,10 +324,7 @@ export function standardDeviationHistogram(
  * @param data An array of numbers representing the dataset.
  * @returns The z-score of the value. If the dataset is empty or has zero standard deviation, the function returns 0.
  */
-export function zScore(
-    value: number,
-    data: number[]
-): number {
+export function zScore(value: number, data: number[]): number {
     if (data.length === 0) return 0;
 
     const mu = mean(data);
@@ -361,12 +345,7 @@ export function zScore(
  * @param totalSumOfSquares The total sum of squares of all values across the histogram buckets.
  * @returns The z-score of the value. If the histogram is empty or has zero standard deviation, the function returns 0.
  */
-export function zScoreHistogram(
-    value: number,
-    totalCount: number,
-    totalSum: number,
-    totalSumOfSquares: number
-): number {
+export function zScoreHistogram(value: number, totalCount: number, totalSum: number, totalSumOfSquares: number): number {
     if (totalCount === 0) return 0;
 
     const mu = totalSum / totalCount;
@@ -385,11 +364,7 @@ export function zScoreHistogram(
  * @param threshold The z-score threshold beyond which a value is considered an anomaly. Default is 3.
  * @returns A boolean indicating whether the value is an anomaly (true) or not (false).
  */
-export function isDataAnomaly(
-    value: number,
-    data: number[],
-    threshold: number = 3
-): boolean {
+export function isDataAnomaly(value: number, data: number[], threshold: number = 3): boolean {
     const z = zScore(value, data);
     return Math.abs(z) > threshold;
 }
@@ -404,13 +379,132 @@ export function isDataAnomaly(
  * @param threshold The z-score threshold beyond which a value is considered an anomaly. Default is 3.
  * @returns A boolean indicating whether the value is an anomaly (true) or not (false).
  */
-export function isDataAnomalyHistogram(
-    value: number,
-    totalCount: number,
-    totalSum: number,
-    totalSumOfSquares: number,
-    threshold: number = 3
-): boolean {
+export function isDataAnomalyHistogram(value: number, totalCount: number, totalSum: number, totalSumOfSquares: number, threshold: number = 3): boolean {
     const z = zScoreHistogram(value, totalCount, totalSum, totalSumOfSquares);
     return Math.abs(z) > threshold;
+}
+
+/**
+ * Removes a linear trend from a series: fits an ordinary least squares line against the sample index
+ * and returns the residuals. Two series that both drift over time correlate strongly even when they are
+ * unrelated ("spurious correlation"); detrending removes that shared drift.
+ * @param data The series to detrend.
+ * @returns The residuals (same length as `data`, zero mean).
+ */
+export function linearDetrend(data: number[]): number[] {
+    const n = data.length;
+    if (n < 2) return data.map(() => 0);
+
+    const meanT = (n - 1) / 2;
+    const meanY = mean(data);
+
+    let covariance = 0;
+    let varianceT = 0;
+    for (let i = 0; i < n; i++) {
+        const dt = i - meanT;
+        covariance += dt * (data[i] - meanY);
+        varianceT += dt * dt;
+    }
+
+    const slope = varianceT === 0 ? 0 : covariance / varianceT;
+    return data.map((value, i) => value - (meanY + slope * (i - meanT)));
+}
+
+/**
+ * Calculates the first differences of a series: d[i] = data[i + 1] - data[i].
+ * Correlating differences measures whether the CHANGES of two series move together,
+ * which is robust against shared trends and level shifts.
+ * @param data The series to difference.
+ * @returns An array of length `data.length - 1` (empty for fewer than 2 samples).
+ */
+export function difference(data: number[]): number[] {
+    const result: number[] = [];
+    for (let i = 1; i < data.length; i++) {
+        result.push(data[i] - data[i - 1]);
+    }
+    return result;
+}   
+
+/**
+ * Calculates the sample autocorrelation of a series at the given lag
+ * (the correlation of the series with a copy of itself shifted by `lag` samples).
+ * @param data The series.
+ * @param lag The shift in samples (default 1).
+ * @returns The autocorrelation in [-1, 1]; 0 for constant or too short series.
+ */
+export function autocorrelation(data: number[], lag: number = 1): number {
+    const n = data.length;
+    if (lag < 0 || n <= lag + 1) return 0;
+
+    const mu = mean(data);
+
+    let denominator = 0;
+    for (let i = 0; i < n; i++) {
+        denominator += (data[i] - mu) ** 2;
+    }
+    if (denominator === 0) return 0;
+
+    let numerator = 0;
+    for (let i = 0; i < n - lag; i++) {
+        numerator += (data[i] - mu) * (data[i + lag] - mu);
+    }
+
+    return numerator / denominator;
+}
+
+/**
+ * Estimates the effective number of independent observations in a pair of autocorrelated series
+ * (Bartlett's AR(1) approximation):  n_eff = n * (1 - rhoX * rhoY) / (1 + rhoX * rhoY).
+ *
+ * 100 samples taken one second apart are usually NOT 100 independent observations. When both series
+ * are positively autocorrelated, n_eff can be several times smaller than n. When the product of the
+ * autocorrelations is not positive the samples are treated as independent (n_eff = n, never larger).
+ * @param n The raw number of samples.
+ * @param autocorrX Lag-1 autocorrelation of the first series.
+ * @param autocorrY Lag-1 autocorrelation of the second series.
+ * @returns The effective sample size, in [min(n, 2), n].
+ */
+export function effectiveSampleSize(n: number, autocorrX: number, autorcorrY: number): number {
+    if (n <= 0) return 0;
+
+    const product = autocorrX * autorcorrY;
+    if (product <= 0) return n;
+
+    const nEff = (n * (1 - product)) / (1 + product);
+    return Math.min(n, Math.max(2, nEff));
+}
+
+/**
+ * Finds the shift at which two series are most strongly (Pearson) correlated.
+ *
+ * Convention: a POSITIVE lag k pairs x[t] with y[t + k], i.e. x leads y by k samples;
+ * a NEGATIVE lag pairs x[t + k] with y[t], i.e. y leads x. At least 3 overlapping samples are kept.
+ * Ties prefer the smaller |lag| (lag 0 first).
+ *
+ * Because 2 * maxLag + 1 candidates are compared, the winning |r| is biased upwards -
+ * treat it as descriptive, not as a significance test.
+ * @param x The first series.
+ * @param y The second series (same length as x).
+ * @param maxLag The largest shift, in samples, to search in each direction.
+ * @returns The lag with the largest |r| and the correlation at that lag.
+ */
+export function laggedCorrelation(x: number[], y: number[], maxLag: number): { lag: number, r: number } {
+    if (x.length !== y.length || x.length === 0) return { lag: 0, r: 0 };
+
+    const n = x.length;
+    let best = { lag: 0, r: pearsonCorrelation(x, y) };
+
+    const limit = Math.min(Math.floor(maxLag), n - 3);
+    for (let k = 1; k <= limit; k++) {
+        for (const lag of [k, -k]) {
+            const xs = lag > 0 ? x.slice(0, n - lag) : x.slice(-lag);
+            const ys = lag > 0 ? y.slice(lag) : y.slice(0, n + lag);
+            const r = pearsonCorrelation(xs, ys);
+
+            if (Math.abs(r) > Math.abs(best.r) + 1e-12) {
+                best = { lag, r };
+            }
+        }
+    }
+    return best;
 }

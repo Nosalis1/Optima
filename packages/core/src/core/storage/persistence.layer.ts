@@ -25,7 +25,8 @@ import type {
     SessionManifest,
     SessionMetadata,
     SessionSummary,
-    HourlyBucket
+    HourlyBucket,
+    CorrelationData
 } from "../domain";
 import { ApplicationEventManager } from "../organizers";
 import Logger from "../telemetry/logger";
@@ -43,6 +44,7 @@ type HealthSnapshotRecord = {
     dashboardData: DashboardData;
     analyticsData: AnalyticsData;
     healthData: HealthData;
+    correlationData: CorrelationData;
 };
 
 interface HourBucketAccumulator {
@@ -59,6 +61,7 @@ interface HourBucketAccumulator {
 
 export class PersistenceRepository {
     private httpBuffer: HttpMetricRecord[] = [];
+    private correlationBuffer: CorrelationData[] = [];
     private readonly enabled: boolean;
     private readonly maxBufferSize: number;
     private readonly baseDir: string;
@@ -160,31 +163,39 @@ export class PersistenceRepository {
         this.httpBuffer.push(metric);
 
         if (this.httpBuffer.length >= this.maxBufferSize && !this.flushInFlight) {
-            void this.flushHttpBuffer();
+            void this.flushBuffers();
         }
     }
 
-    private async flushHttpBuffer(): Promise<void> {
-        if (this.httpBuffer.length === 0) return;
+    shouldFlushBuffers(): boolean {
+        return (this.httpBuffer.length > 0 || this.correlationBuffer.length > 0) && !this.flushInFlight;
+    }
+
+    private async flushBuffer(buffer: any[], category: string): Promise<void> {
+        try {
+            const filePath = constructFilePath({ baseDir: this.baseDir, category });
+            await appendRecordsAsync(filePath, category, buffer, { schemaVersion: 1 });
+        } catch (err) {
+            Logger.error(`Failed to write ${category} metrics to disk:`, err);
+        }
+    }
+
+    private async flushBuffers(): Promise<void> {
         this.flushInFlight = true;
 
-        const toWrite = this.httpBuffer;
-        this.httpBuffer = [];
-
-        try {
-            const filePath = constructFilePath({
-                baseDir: this.baseDir,
-                category: 'http_requests'
+        if (this.httpBuffer.length > 0) {
+            await this.flushBuffer(this.httpBuffer, 'http_requests').finally(() => {
+                this.httpBuffer = [];
             });
-
-            await appendRecordsAsync(filePath, "http_requests", toWrite, {
-                schemaVersion: 1
-            });
-        } catch (err) {
-            Logger.error("Failed to write HTTP metrics to disk:", err);
-        } finally {
-            this.flushInFlight = false;
         }
+
+        if (this.correlationBuffer.length > 0) {
+            await this.flushBuffer(this.correlationBuffer, 'correlation').finally(() => {
+                this.correlationBuffer = [];
+            });
+        }
+
+        this.flushInFlight = false;
     }
 
     async onPublisherTick(snapshot: HealthSnapshotRecord | null): Promise<void> {
@@ -198,8 +209,10 @@ export class PersistenceRepository {
         const filePath = constructFilePath({ baseDir: this.baseDir, category: 'system_health' });
         await appendRecordsAsync(filePath, "system_health", [data], { schemaVersion: 1 });
 
-        if (this.httpBuffer.length > 0 && !this.flushInFlight) {
-            void this.flushHttpBuffer();
+        await this.onCorrelationTick(snapshot.correlationData);
+
+        if (this.shouldFlushBuffers()) {
+            void this.flushBuffers();
         }
     }
 
@@ -209,9 +222,16 @@ export class PersistenceRepository {
         const filePath = constructFilePath({ baseDir: this.baseDir, category: 'events' });
         await appendRecordsAsync(filePath, "events", [event], { schemaVersion: 1 });
 
-        if (this.httpBuffer.length > 0 && !this.flushInFlight) {
-            void this.flushHttpBuffer();
+        if (this.shouldFlushBuffers()) {
+            void this.flushBuffers();
         }
+    }
+
+    private async onCorrelationTick(correlation: CorrelationData): Promise<void> {
+        if (!this.enabled) return;
+
+        const filePath = constructFilePath({ baseDir: this.baseDir, category: 'correlation' });
+        await appendRecordsAsync(filePath, "correlation", [correlation], { schemaVersion: 1 });
     }
 
     //#endregion
@@ -382,7 +402,7 @@ export class PersistenceRepository {
                     endedAt: manifest.lastShutdownAt
                 });
                 await writeJSONAtomic(this.manifestPath, manifest);
-                await this.flushHttpBuffer();
+                await this.flushBuffers();
                 Logger.debug('PersistenceLayer: Session manifest updated and HTTP buffer flushed.');
 
                 const removed = await cleanupOrphanedTempFiles(this.baseDir);
@@ -412,6 +432,9 @@ export class PersistenceRepository {
         archiveOldPersistenceFiles(this.baseDir, 'events').catch(err => {
             Logger.error('Error archiving old event files', err);
         });
+        archiveOldPersistenceFiles(this.baseDir, 'correlation').catch(err => {
+            Logger.error('Error archiving old correlation files', err);
+        });
     }
 
     //#endregion
@@ -432,7 +455,8 @@ export class PersistenceRepository {
 
         await streamWriteCategory(out, this.baseDir, 'http_requests', dates, window);
         await streamWriteCategory(out, this.baseDir, 'system_health', dates, window);
-        await streamWriteCategory(out, this.baseDir, 'events', dates, window, true);
+        await streamWriteCategory(out, this.baseDir, 'events', dates, window);
+        await streamWriteCategory(out, this.baseDir, 'correlation', dates, window, true);
 
         out.write('}');
         return true;

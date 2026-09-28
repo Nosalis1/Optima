@@ -69,7 +69,10 @@ export default function LineGraph({
     const maxX = Math.max(...allXValues);
     const xRange = maxX - minX || 1; // avoid division by zero
 
-    const colCount = Math.max(1, Math.ceil(longestSeries.length / cols));
+    const pointCount = longestSeries.length;
+    const intervalCount = Math.max(1, pointCount - 1);
+    const colCount = Math.max(1, Math.ceil(intervalCount / cols));
+    // const colCount = Math.max(1, longestSeries.length - 1);
     const xAxisLabels = Array.from({ length: colCount + 1 }, (_, idx) => {
         const value = minX + (idx / colCount) * xRange;
         return formatXLabel(value, idx);

@@ -12,3 +12,4 @@ export { default as QuestionMarkIcon } from './questionmark';
 export { default as SunIcon } from './sun';
 export { default as MoonIcon } from './moon';
 export { default as DownloadIcon } from './download';
+export { default as DnaIcon } from './dna';

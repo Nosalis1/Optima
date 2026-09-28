@@ -10,6 +10,7 @@ import type {
     WebSocketAdapter
 } from '../adapters/websocket.adapter';
 import {
+    type CorrelationDataProvider,
     type MetricsDataProvider,
     type SessionDataProvider,
     WebSocketEvents
@@ -24,7 +25,8 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
     constructor(
         private readonly server: HTTPServer,
         private readonly provider: MetricsDataProvider,
-        private readonly sessionProvider: SessionDataProvider
+        private readonly sessionProvider: SessionDataProvider,
+        private readonly correlationProvider: CorrelationDataProvider
     ) { }
 
     init(): void {
@@ -150,6 +152,16 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
                 socket.emit(
                     WebSocketEvents.RESPONSE_HEALTH_DATA,
                     this.provider.getHealthData()
+                )
+            }
+        );
+
+        socket.on(
+            WebSocketEvents.REQUEST_CORRELATION_DATA,
+            () => {
+                socket.emit(
+                    WebSocketEvents.RESPONSE_CORRELATION_DATA,
+                    this.correlationProvider.pack()
                 )
             }
         );

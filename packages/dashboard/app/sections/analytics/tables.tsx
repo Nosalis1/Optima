@@ -86,7 +86,6 @@ function Content({ data }: { data: AnalyticsData['endpointsTable'] }) {
                     <tbody className="divide-y divide-border">
                         {data.data.map((row, index) => (
                             <tr key={index}>
-                                {/* //! Add rest of the columns */}
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{index + 1}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{row.method}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-accent-soft">{row.route}</td>

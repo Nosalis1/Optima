@@ -11,6 +11,7 @@ import type {
     SessionManifest,
     SessionSummary,
     AnalyticsFilterSettings,
+    CorrelationData,
 } from "../domain";
 import {
     WebSocketEvents
@@ -30,12 +31,17 @@ export interface SessionDataProvider {
     getSessionSummary(sessionNumber: number): Promise<SessionSummary | null>;
 }
 
+export interface CorrelationDataProvider {
+    pack(): CorrelationData;
+}
+
 type MetricsPublishedData = {
     systemStaticInfo: SystemStaticInfo;
     dashboardData: DashboardData;
     dashboardTickData: DashboardTickData;
     analyticsData: AnalyticsData;
     healthData: HealthData;
+    correlationData: CorrelationData;
 } | null;
 
 export class MetricsPublisher {
@@ -44,6 +50,7 @@ export class MetricsPublisher {
     constructor(
         private readonly provider: MetricsDataProvider,
         private readonly sessionProvider: SessionDataProvider,
+        private readonly correlationProvider: CorrelationDataProvider,
         private readonly websocket: WebSocketAdapter,
     ) { }
 
@@ -54,10 +61,9 @@ export class MetricsPublisher {
             dashboardTickData: this.provider.getDashboardTickData(),
             analyticsData: this.provider.getAnalyticsData(),
             healthData: this.provider.getHealthData(),
+            correlationData: this.correlationProvider.pack(),
         };
 
-
-        //? consider sending only the changed data instead of sending all data every time
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_SYSTEM_DATA,
             this.publishData.systemStaticInfo
@@ -70,6 +76,10 @@ export class MetricsPublisher {
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_HEALTH_DATA,
             this.publishData.healthData
+        );
+        this.websocket.broadcast(
+            WebSocketEvents.RESPONSE_CORRELATION_DATA,
+            this.publishData.correlationData
         );
     }
 

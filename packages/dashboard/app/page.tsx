@@ -3,6 +3,7 @@ import DashboardPage from "./sections/dashboard/index";
 import AnalyticsPage from "./sections/analytics/index";
 import HealthPage from "./sections/health/index";
 import SessionsPage from "./sections/sessions/index";
+import CorrelationPage from "./sections/correlation";
 import ConfigurationPage from "./sections/configuration";
 import { useGate } from "./context/gate.context";
 
@@ -17,6 +18,7 @@ export default function Page() {
       {activeTab === "/analytics" && <AnalyticsPage />}
       {activeTab === "/health" && <HealthPage />}
       {activeTab === "/sessions" && <SessionsPage />}
+      {activeTab === "/correlation" && <CorrelationPage />}
       {activeTab === "/configuration" && <ConfigurationPage />}
     </>
   );

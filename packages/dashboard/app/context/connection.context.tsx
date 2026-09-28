@@ -38,6 +38,9 @@ export enum WebSocketEvents {
 
     REQUEST_HEALTH_DATA = "request-health-data",
     RESPONSE_HEALTH_DATA = "response-health-data",
+
+    REQUEST_CORRELATION_DATA = "request-correlation-data",
+    RESPONSE_CORRELATION_DATA = "response-correlation-data",
 }
 
 export function ConnectionProvider({

@@ -34,7 +34,7 @@ export class Histogram {
     private anomalyCount = 0;
 
     constructor(
-        private readonly anomalySampleSize: number = 60, //! For this use calculation
+        private readonly anomalySampleSize: number = 60,
         private readonly anomalyLowerLimit: number = 180
     ) {
         this.counters = new Uint32Array(this.limits.length);

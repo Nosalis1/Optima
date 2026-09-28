@@ -6,3 +6,4 @@ export * from './dashboard.types';
 export * from './telemetry.types';
 export * from './event.types';
 export * from './session.types';
+export * from './correlation.types';

@@ -141,6 +141,18 @@ export class NestWebSocketAdapter
         );
     }
 
+    @SubscribeMessage(
+        WebSocketEvents.REQUEST_CORRELATION_DATA,
+    )
+    handleCorrelationData(
+        @ConnectedSocket() socket: Socket,
+    ): void {
+        socket.emit(
+            WebSocketEvents.RESPONSE_CORRELATION_DATA,
+            this.dependencies.correlation.pack(),
+        );
+    }
+
     broadcast(
         event: string,
         data: unknown,

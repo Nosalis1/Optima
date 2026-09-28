@@ -4,7 +4,7 @@ import {
     ChalkBoardIcon,
     FileChartBarIcon,
     LifeSaverIcon,
-    PreferencesIcon
+    DnaIcon
 } from "@/app/components/shared/icons";
 import { useGate } from "@/app/context/gate.context";
 
@@ -18,6 +18,7 @@ const Sidebar = () => {
         { name: "Dashboard", path: "/", icon: ChalkBoardIcon },
         { name: "Route Analytics", path: "/analytics", icon: FileChartBarIcon },
         { name: "System Health", path: "/health", icon: LifeSaverIcon },
+        { name: "Correlation", path: "/correlation", icon: DnaIcon },
         { name: "Sessions", path: "/sessions", icon: ArchiveIcon },
     ];
 
