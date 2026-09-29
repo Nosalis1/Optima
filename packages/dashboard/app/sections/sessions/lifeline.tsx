@@ -1,9 +1,9 @@
 import { Card } from "@/app/components/cards/card";
-import type { SessionMetadata } from "../../domain";
+import type { SessionRecord } from "../../domain";
 import React from "react";
 
 type Props = {
-    sessions: SessionMetadata[];
+    sessions: SessionRecord[];
     selectedSessionNumber?: number | null;
     onSessionClick?: (sessionNumber: number) => void;
 };
@@ -60,7 +60,7 @@ export function Lifeline({ sessions, selectedSessionNumber, onSessionClick }: Pr
                                         focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400
                                         ${isSelected
                                             ? "border-blue-500 bg-blue-500 shadow-md shadow-blue-500/30 scale-110"
-                                            : session.recoveredFromCrash
+                                            : session.status === 'INTERRUPTED'
                                                 ? "border-yellow-500 bg-yellow-400 hover:scale-110"
                                                 : "border-green-500 bg-green-500 hover:scale-110"
                                         }
@@ -87,7 +87,7 @@ export function Lifeline({ sessions, selectedSessionNumber, onSessionClick }: Pr
                                     `}
                                 >
                                     Session {session.sessionNumber}
-                                    {session.recoveredFromCrash && (<p className="ml-2 text-xs text-yellow-600">recovered</p>)}
+                                    {session.status === 'INTERRUPTED' && (<p className="ml-2 text-xs text-yellow-600">interrupted</p>)}
                                 </button>
                             </div>
                         );

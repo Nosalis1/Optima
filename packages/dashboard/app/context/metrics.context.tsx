@@ -10,7 +10,7 @@ import type {
     DashboardData,
     DashboardTickData,
     HealthData,
-    SessionMetadata,
+    SessionRecord,
     SessionSummary,
     SystemStaticInfo,
     SystemStatus,
@@ -21,7 +21,7 @@ const MetricsContext = React.createContext<{
     data: MetricsData;
     analyticsFilterSettings: AnalyticsFilterSettings;
     updateAnalyticsFilters: (newFilters: Partial<AnalyticsFilterSettings>) => void;
-    sessions: SessionMetadata[];
+    sessions: SessionRecord[];
     selectedSession: number | null;
     selectedSessionSummary: SessionSummary | null;
     selectSession: (sessionNumber: number | null) => void;
@@ -72,7 +72,7 @@ export function MetricsProvider({
         page: 1
     });
     const filtersRef = React.useRef(filters);
-    const [sessions, setSessions] = React.useState<SessionMetadata[]>(mockSessionData());
+    const [sessions, setSessions] = React.useState<SessionRecord[]>(mockSessionData());
     const [selectedSession, setSelectedSession] = React.useState<number | null>(null);
     const [selectedSessionSummary, setSelectedSessionSummary] = React.useState<SessionSummary | null>(null);
 
@@ -144,7 +144,7 @@ export function MetricsProvider({
 
         try {
             registerEventListener(WebSocketEvents.RESPONSE_SESSION_METADATA, sessionMetadata => {
-                setSessions(sessionMetadata.sessionHistory);
+                setSessions(sessionMetadata.sessions);
                 setSelectedSession(null);
                 setSelectedSessionSummary(null);
             });

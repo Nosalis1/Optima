@@ -3,7 +3,7 @@ import type {
     CorrelationData,
     DashboardData,
     HealthData,
-    SessionMetadata,
+    SessionRecord,
     SessionSummary,
 } from '../../domain';
 
@@ -270,19 +270,8 @@ export function mockHealthData(): HealthData {
     }
 }
 
-export function mockSessionData(): SessionMetadata[] {
-    return [
-        { sessionNumber: 1, recoveredFromCrash: false, startedAt: "2024-06-01 10:00:00", endedAt: "2024-06-01 10:30:00" },
-        { sessionNumber: 2, recoveredFromCrash: true, startedAt: "2024-06-02 11:00:00", endedAt: null },
-        { sessionNumber: 3, recoveredFromCrash: false, startedAt: "2024-06-03 12:00:00", endedAt: null },
-        { sessionNumber: 4, recoveredFromCrash: false, startedAt: "2024-06-04 13:00:00", endedAt: null },
-        { sessionNumber: 5, recoveredFromCrash: true, startedAt: "2024-06-05 14:00:00", endedAt: null },
-        { sessionNumber: 6, recoveredFromCrash: false, startedAt: "2024-06-06 15:00:00", endedAt: null },
-        { sessionNumber: 7, recoveredFromCrash: false, startedAt: "2024-06-07 16:00:00", endedAt: "2024-06-07 17:00:00" },
-        { sessionNumber: 8, recoveredFromCrash: true, startedAt: "2024-06-08 17:00:00", endedAt: null },
-        { sessionNumber: 9, recoveredFromCrash: false, startedAt: "2024-06-09 18:00:00", endedAt: null },
-        { sessionNumber: 10, recoveredFromCrash: false, startedAt: "2024-06-10 19:00:00", endedAt: null }
-    ];
+export function mockSessionData(): SessionRecord[] {
+    return [];
 }
 
 export function mockSessionSummary(sessionNumber: number): SessionSummary {

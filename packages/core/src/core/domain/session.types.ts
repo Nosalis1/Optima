@@ -1,30 +1,41 @@
+
 /**
- * Represents the metadata for a single session, including its number, whether it was recovered from a crash, and its start and end times.
- * @property {number} sessionNumber - The unique number identifying the session.
- * @property {boolean} recoveredFromCrash - Indicates whether the session was recovered from a crash.
+ * Represents the status of a session, which can be either 'RUNNING', 'COMPLETED', or 'INTERRUPTED'.
+ * - 'RUNNING': The session is currently active and ongoing.
+ * - 'COMPLETED': The session has finished successfully.
+ * - 'INTERRUPTED': The session was interrupted before completion, possibly due to an error or unexpected shutdown.
+ */
+export type SessionStatus = 'RUNNING' | 'COMPLETED' | 'INTERRUPTED';
+
+/**
+ * Represents a record of a session, containing essential information about the session's lifecycle and status.
+ * @property {string} sessionId - A unique identifier for the session.
+ * @property {number} sessionNumber - A sequential number representing the order of the session.
  * @property {string} startedAt - The ISO string representing when the session started.
  * @property {string | null} endedAt - The ISO string representing when the session ended, or null if it is currently running.
+ * @property {string | null} lastPersistedAt - The ISO string representing when the session's data was last persisted, or null if it has not been persisted yet.
+ * @property {number} lastCommitedSequence - The last committed sequence number for the session's data.
+ * @property {SessionStatus} status - The current status of the session, which can be 'RUNNING', 'COMPLETED', or 'INTERRUPTED'.
  */
-export interface SessionMetadata {
+export type SessionRecord = {
+    sessionId: string;
     sessionNumber: number;
-    recoveredFromCrash: boolean;
     startedAt: string;
     endedAt: string | null;
+    lastPersistedAt: string | null;
+    lastCommitedSequence: number;
+    status: SessionStatus;
 }
 
 /**
- * Represents the manifest of all sessions, including the total number of sessions, the last started and shutdown times, and a history of session metadata.
- * @property {number} totalSessions - The total number of sessions recorded.
- * @property {string} lastStartedAt - The ISO string representing when the last session started.
- * @property {string | null} lastShutdownAt - The ISO string representing when the last session ended, or null if it is currently running.
- * @property {SessionMetadata[]} sessionHistory - An array of session metadata objects, each representing a single session's details.
+ * Represents a manifest of sessions, containing a version number and an array of session records.
+ * @property {number} version - The version number of the session manifest.
+ * @property {SessionRecord[]} sessions - An array of session records, each representing a single session's information.
  */
 export interface SessionManifest {
-    totalSessions: number;
-    lastStartedAt: string;
-    lastShutdownAt: string | null;
-    sessionHistory: SessionMetadata[];
-};
+    version: 2;
+    sessions: SessionRecord[];
+}
 
 /**
  * Represents a summary of metrics for a single hour within a session, including counts of client and server errors, average and maximum requests per second (RPS), average and maximum latency, counts of healthy and slow endpoints, and the number of samples collected.

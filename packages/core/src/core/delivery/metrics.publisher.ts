@@ -7,7 +7,7 @@ import type {
     DashboardData,
     DashboardTickData,
     HealthData,
-    SessionMetadata,
+    SessionRecord,
     SessionManifest,
     SessionSummary,
     AnalyticsFilterSettings,
@@ -26,7 +26,7 @@ export interface MetricsDataProvider {
 }
 
 export interface SessionDataProvider {
-    getSessionMetadata(): SessionMetadata | null;
+    getSessionRecord(): SessionRecord | null;
     getSessionManifest(): Promise<SessionManifest>;
     getSessionSummary(sessionNumber: number): Promise<SessionSummary | null>;
 }
