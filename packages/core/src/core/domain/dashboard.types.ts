@@ -70,6 +70,18 @@ export interface DashboardData {
     charts: DashboardChartData<number[]>;
 }
 
+export const emptyDashboardData = (): DashboardData => ({
+    current: { rps: 0, latency: 0, errorRate: 0, eventLoopLag: 0, heapUsage: 0, heapSize: 0 },
+    history: { rps: [], latency: [], errorRate: [], eventLoopLag: [], heapUsage: [], heapSize: [], rssMemory: [], totalHeap: [] },
+    impactEndpoints: [],
+    alerts: [],
+    charts: {
+        throughput: { rps: [], errorClient: [], errorServer: [], totalCount: 0 },
+        percentiles: { p50: [], p95: [], p99: [], totalCount: 0 },
+        runtimePerformance: { heapUsage: [], heapSize: [], lag: [], totalCount: 0 }
+    }
+});
+
 /**
  * Represents the dashboard tick data structure, which includes current metrics, historical data, impacted endpoints, alerts, and chart configurations for a specific tick.
  * @property {object} current - Current instantaneous values for various metrics.
@@ -91,17 +103,27 @@ export interface DashboardTickData {
     charts: DashboardChartData<number>;
 }
 
+export const emptyDashboardTickData = (): DashboardTickData => ({
+    current: { rps: 0, latency: 0, errorRate: 0, eventLoopLag: 0, heapUsage: 0, heapSize: 0 },
+    history: { rps: 0, latency: 0, errorRate: 0, eventLoopLag: 0, heapUsage: 0, heapSize: 0, rssMemory: 0, totalHeap: 0 },
+    impactEndpoints: [],
+    alerts: [],
+    charts: {
+        throughput: { rps: 0, errorClient: 0, errorServer: 0, totalCount: 0 },
+        percentiles: { p50: 0, p95: 0, p99: 0, totalCount: 0 },
+        runtimePerformance: { heapUsage: 0, heapSize: 0, lag: 0, totalCount: 0 }
+    }
+});
+
 /**
  * Represents the analytics filter settings used for filtering analytics data based on query, HTTP method, and status code.
  * @property {string} query - The search query string for filtering analytics data.
  * @property {'ALL' | 'GET' | 'POST' | 'PUT' | 'DELETE'} method - The HTTP method filter for analytics data.
- * @property {'ALL' | '2xx' | '4xx' | '5xx'} status - The HTTP status code filter for analytics data.
  * @property {number} page - The page number for paginated analytics data.
  */
 export interface AnalyticsFilterSettings {
     query: string;
     method: 'ALL' | 'GET' | 'POST' | 'PUT' | 'DELETE';
-    status: 'ALL' | '2xx' | '4xx' | '5xx';
     page: number;
 }
 
@@ -167,3 +189,35 @@ export interface HealthData {
         };
     };
 }
+
+export const emptyHealthData = (): HealthData => ({
+    cpu: { usageRate: 0, numberOfCores: 0, perCoreUsage: [], userUsage: 0, systemUsage: 0, idleUsage: 0 },
+    memory: { heapUsage: 0, heapSize: 0, rssMemory: 0, rssMemoryTotal: 0, externalMemory: 0 },
+    eventLoop: { lag: 0, threshold: 0 },
+    handles: { activeHandles: 0, activeHandlesTimers: 0, activeHandlesSockets: 0, activeLibuvHandles: 0, timers: 0, fileDescriptors: 0 },
+    garbageCollection: {
+        gcCount: 0,
+        gcTime: 0,
+        gcPauseAverage: 0,
+        minorGC: { runCount: 0, averageTime: 0 },
+        majorGC: { runCount: 0, averageTime: 0 },
+        incrementalGC: { runCount: 0, averageTime: 0 },
+        heapSpaces: [],
+        gcTotals: { totalPauseTime: 0, freedMemory: 0, promotions: 0, tenuredSize: 0 }
+    },
+    runtime: {
+        pid: 0,
+        platform: '',
+        nodeVersion: '',
+        v8Version: '',
+        libuvVersion: '',
+        openSSLVersion: '',
+        threadPoolSize: 0,
+        activeThreads: 0,
+        startup: { bootstrapTime: 0, requiredModules: 0 }
+    },
+    history: {
+        eventLoopLag: [],
+        memoryBreakdown: { usedHeap: [], totalHeap: [], rssMemory: [] }
+    }
+});

@@ -1,128 +1,131 @@
-import type {
-    EndpointTelemetry,
-} from '../../domain';
+import { RingBuffer } from "../utility";
 import {
-    RingBuffer
-} from "../utility";
-import {
-    HealthStore
-} from "../stores/health.store";
-import type {
-    EndpointStore
-} from "../stores/endpoint.store";
-import type {
-    MetricsStore
-} from "../stores/metrics.store";
+    createAggregate,
+    recordInto,
+    deepFreeze,
+    type MetricBucket,
+    type RequestAggregate,
+    type Origin
+} from './bucket-metric';
+import type { RuntimeStore } from "./runtime.store";
 
-export interface TelemetryBucket {
-    timestamp: number;
-    rps: {
-        count: number;
-        perEndpoints: Map<string, number>;
-    };
-    latency: {
-        average: number;
-        p50: number;
-        p95: number;
-        p99: number;
-    };
-    error: {
-        rate: number;
-        clientCount: number;
-        serverCount: number;
-    };
-    endpoints: EndpointTelemetry[];
-    health: ReturnType<HealthStore["get"]>;
+export interface BucketStoreOptions {
+    sessionId: string;
+    instanceId: string;
+    intervalMs?: number;
+    historySize?: number;
+    maxEndpoints?: number;
+    originProvider?: () => Origin;
+}
+
+interface OpenInterval {
+    startHr: bigint;
+    startWall: number;
+    requests: RequestAggregate;
+    endpoints: Map<string, { method: string; route: string; aggregate: RequestAggregate; }>;
+    flags: Set<string>;
+    syntheticSeen: boolean;
+    realSeen: boolean;
 }
 
 export class BucketStore {
-    private readonly history: RingBuffer<TelemetryBucket>;
-
-    private currentSecond: number;
-    private requestCount: number;
-    private endpointRequests: Map<string, number>;
+    private readonly history: RingBuffer<MetricBucket>;
+    private readonly intervalMs: number;
+    private readonly maxEndpoints: number;
+    private sequence = 0;
+    private lastCommitted = 0;
+    private open: OpenInterval;
 
     constructor(
-        private readonly endpointStore: EndpointStore,
-        private readonly healthStore: HealthStore,
-        private readonly metricsStore: MetricsStore,
-        bufferSize: number = 60
+        private readonly runtime: RuntimeStore,
+        private readonly options: BucketStoreOptions
     ) {
-        this.history = new RingBuffer<TelemetryBucket>(bufferSize);
-        this.currentSecond = this.getSecond();
-        this.requestCount = 0;
-        this.endpointRequests = new Map<string, number>();
+        this.intervalMs = options.intervalMs ?? 1000;
+        this.maxEndpoints = options.maxEndpoints ?? 200;
+        this.history = new RingBuffer<MetricBucket>(options.historySize ?? 60);
+        this.open = this.openInterval(Date.now(), process.hrtime.bigint());
     }
 
-    recordRequest(
-        method: string,
-        route: string
-    ): void {
-        this.requestCount++;
-        const key = `${method}:${route}`;
-        const count = this.endpointRequests.get(key) ?? 0;
-        this.endpointRequests.set(key, count + 1);
-    }
+    record(input: { method: string; route: string; duration: number; statusCode: number; origin?: Origin }): void {
+        const cur = this.open;
+        if (!recordInto(cur.requests, input.duration, input.statusCode)) return;
 
-    flush(): void {
-        const now = this.getSecond();
+        const origin = input.origin ?? this.options.originProvider?.() ?? 'real';
+        if (origin === 'synthetic') cur.syntheticSeen = true;
+        else cur.realSeen = true;
 
-        // same second
-        if (now === this.currentSecond) {
-            return;
+        let key = `${input.method}:${input.route}`;
+        let entry = cur.endpoints.get(key);
+        if (!entry && cur.endpoints.size >= this.maxEndpoints) {
+            cur.flags.add('ENDPOINT_OVERFLOW');
+            key = 'OTHER:__overflow__';
+            entry = cur.endpoints.get(key);
         }
+        if (!entry) {
+            const overflow = key === 'OTHER:__overflow__';
+            entry = {
+                method: overflow ? 'OTHER' : input.method,
+                route: overflow ? '__overflow__' : input.route,
+                aggregate: createAggregate()
+            };
+            cur.endpoints.set(key, entry);
+        }
+        recordInto(entry.aggregate, input.duration, input.statusCode);
+    }
 
-        const endpoints = this.endpointStore.all();
+    flush(opts: { force?: boolean }): MetricBucket | null {
+        const nowHr = process.hrtime.bigint();
+        const cur = this.open;
+        const elapsedMs = Number(nowHr - cur.startHr) / 1e6;
+        if (!opts.force && elapsedMs < this.intervalMs) return null;
+        if (opts.force && elapsedMs < 1) return null;
 
-        const metrics = this.metricsStore.snapshot();
+        const endWall = Date.now();
+        const flags = new Set(cur.flags);
+        if (elapsedMs > this.intervalMs * 1.5) flags.add('LATE_CLOSE');
+        if (opts.force && elapsedMs < this.intervalMs) flags.add('PARTIAL');
+        if (cur.syntheticSeen && cur.realSeen) flags.add('MIXED_ORIGIN');
+        if (Math.abs((endWall - cur.startWall) - elapsedMs) > 500) flags.add('CLOCK_SKEW');
 
-        const bucket: TelemetryBucket = {
-            timestamp: this.currentSecond,
-            rps: {
-                count: this.requestCount,
-                perEndpoints: new Map(this.endpointRequests),
-            },
+        const sequence = ++this.sequence;
+        const origin: Origin = cur.syntheticSeen ? 'synthetic' : cur.realSeen ? 'real' : (this.options.originProvider?.() ?? 'real');
 
-            latency: {
-                average: metrics.averageLatency,
-                p50: metrics.latency.p50,
-                p95: metrics.latency.p95,
-                p99: metrics.latency.p99,
-            },
+        const runtime = this.runtime.collect();
 
-            error: {
-                rate: metrics.errorRate,
-                clientCount: metrics.errorClientCount,
-                serverCount: metrics.errorServerCount,
-            },
-
-            endpoints,
-
-            health: this.healthStore.get(),
-        };
+        const bucket = deepFreeze<MetricBucket>({
+            schemaVersion: 2,
+            bucketId: `${this.options.sessionId}:${sequence}`,
+            sessionId: this.options.sessionId,
+            instanceId: this.options.instanceId,
+            sequence,
+            startTime: new Date(cur.startWall).toISOString(),
+            endTime: new Date(endWall).toISOString(),
+            durationMs: Math.round(elapsedMs * 1000) / 1000,
+            origin,
+            requests: cur.requests,
+            runtime,
+            endpoints: [...cur.endpoints.values()].map(e => ({ method: e.method, route: e.route, ...e.aggregate })),
+            qualityFlags: [...flags],
+        });
 
         this.history.push(bucket);
-
-        this.reset();
-        this.metricsStore.reset();
-
-        this.currentSecond = now;
+        this.open = this.openInterval(endWall, nowHr);
+        return bucket;
     }
 
-    getHistory(): TelemetryBucket[] {
-        return this.history.values();
-    }
+    markCommitted(sequence: number): void { this.lastCommitted = Math.max(this.lastCommitted, sequence); }
+    get lastCommittedSequence(): number { return this.lastCommitted; }
+    getHistory(): MetricBucket[] { return this.history.values(); }
+    latest(): MetricBucket | undefined { return this.history.latest(); }
 
-    latest(): TelemetryBucket | undefined {
-        return this.history.latest();
-    }
-
-    private reset() {
-        this.requestCount = 0;
-        this.endpointRequests.clear();
-    }
-
-    private getSecond(): number {
-        return (Math.floor(Date.now() / 1000) * 1000);
+    private openInterval(startWall: number, startHr: bigint): OpenInterval {
+        return {
+            startHr, startWall,
+            requests: createAggregate(),
+            endpoints: new Map(),
+            flags: new Set(),
+            syntheticSeen: false,
+            realSeen: false
+        };
     }
 }

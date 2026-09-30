@@ -30,6 +30,7 @@ import {
 import { SessionRegistry } from './persistence/session-registry';
 import { ApplicationEventManager } from "../organizers";
 import Logger from "../telemetry/logger";
+import type { MetricBucket } from "./stores/bucket-metric";
 
 type HttpMetricRecord = {
     method: string;
@@ -80,6 +81,8 @@ export class PersistenceRepository {
 
     private shutdownPromise: Promise<void> | null = null;
 
+    readonly sessionId = randomUUID();
+
     constructor(
         private readonly config: ReadonlyConfig
     ) {
@@ -116,7 +119,7 @@ export class PersistenceRepository {
             Logger.debug(`PersistenceLayer: Removed ${removed} orphaned temporary files during initialization.`);
         }
 
-        const session = await this.registry.start();
+        const session = await this.registry.start(this.sessionId);
         Logger.debug(`Session initialized: #${session.sessionNumber} (${session.sessionId}), recoveredFromCrash=${this.registry.recoveredFromCrash}`);
 
         if (this.registry.recoveredFromCrash) {
@@ -163,6 +166,22 @@ export class PersistenceRepository {
         await this.enqueue('http_requests', batch);
     }
 
+    async onBucketClosed(bucket: MetricBucket): Promise<boolean> {
+        if (!this.enabled) return false;
+        const session = await this.ready;
+        if (!session) return false;
+        try {
+            //! Change after next step, write the whole bucket instead of analized data
+            // await this.writer.enqueueAppend(this.baseDir, 'metric_buckets', [{ recordId: bucket.bucketId, payload: bucket }]);
+            // this.registry.notePersisted(bucket.sequence);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    //! Deprecated, as we will persist the whole bucket instead of analized data
+    // TODO: Change in next step
     async onPublisherTick(snapshot: HealthSnapshotRecord | null): Promise<void> {
         if (!this.enabled || snapshot === null) return;
         const session = await this.ready;

@@ -58,12 +58,6 @@ export interface DashboardTickData {
 
 // Deep analytics engine slice
 export interface AnalyticsData {
-    // TODO: Maybe add these
-    // slowestEndpoints (P95 > 1400ms)
-    // busiestEndpoints (RPS > MaxRPS * 0.8)
-    // mostErrorProneEndpoints (ErrorRate > MaxErrorRate * 0.8)
-    // recentlyRecoveredEndpoints
-    //?
     summary: {
         totalEndpoints: number;
         healthyEndpoints: number;

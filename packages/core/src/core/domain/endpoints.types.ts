@@ -14,6 +14,7 @@ import type {
  */
 export interface EndpointTelemetry extends EndpointRoute {
     rps: number;
+    p50: number;
     p95: number;
     p99?: number;
     errorRate: number;

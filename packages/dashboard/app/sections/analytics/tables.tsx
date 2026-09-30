@@ -12,7 +12,6 @@ type Props = {
 
 function Filters({ settings, onChange }: { settings: AnalyticsFilterSettings; onChange?: (settings: Partial<AnalyticsFilterSettings>) => void }) {
     const methods = ['ALL', 'GET', 'POST', 'PUT', 'DELETE'];
-    const statuses = ['ALL', '2xx', '4xx', '5xx'];
 
     // Query debouncing
     const [query, setQuery] = React.useState(settings.query);
@@ -45,17 +44,6 @@ function Filters({ settings, onChange }: { settings: AnalyticsFilterSettings; on
                         {methods.map((method) => (
                             <option key={method} value={method}>
                                 {method}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="flex flex-col w-full lg:w-40">
-                    <span className="text-[10px] font-bold text-accent-soft tracking-wider mb-1 uppercase">STATUS</span>
-                    <select className="w-full bg-background text-foreground px-3 py-2 rounded-md border border-border focus:outline-none focus:border-accent text-sm cursor-pointer" onChange={(e) => onChange && onChange({ status: e.target.value as AnalyticsFilterSettings['status'] })}>
-                        {statuses.map((status) => (
-                            <option key={status} value={status}>
-                                {status}
                             </option>
                         ))}
                     </select>

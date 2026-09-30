@@ -8,6 +8,9 @@ import {
     type CorrelationData
 } from '../domain';
 import Logger from './logger';
+import {
+    deriveMetrics,
+} from '../storage/stores/bucket-metric';
 
 type HistoryEntry = ReturnType<LocalRepository['bucket']['getHistory']>[number];
 
@@ -17,12 +20,12 @@ interface Metric {
 }
 
 const METRICS = {
-    rps: { label: 'RPS', select: e => e.rps.count },
-    errorRate: { label: 'error rate', select: e => e.error.rate },
-    heapUsage: { label: 'heap memory', select: e => e.health.memory.heapUsage },
-    p95Latency: { label: 'p95 latency', select: e => e.latency.p95 },
-    averageLatency: { label: 'average latency', select: e => e.latency.average },
-    eventLoopLag: { label: 'event loop lag', select: e => e.health.eventLoop.lag }
+    rps: { label: 'RPS', select: e => e.requests.requestCount },
+    errorRate: { label: 'error rate', select: e => e.requests.clientErrorCount + e.requests.serverErrorCount / e.requests.requestCount },
+    heapUsage: { label: 'heap memory', select: e => e.runtime.memoryUsage.heapUsage },
+    p95Latency: { label: 'p95 latency', select: e => deriveMetrics(e.requests, e.durationMs).p95 },
+    averageLatency: { label: 'average latency', select: e => deriveMetrics(e.requests, e.durationMs).averageLatency },
+    eventLoopLag: { label: 'event loop lag', select: e => e.runtime.loopDelay.meanMs },
 } satisfies Record<string, Metric>;
 
 type MetricKey = keyof typeof METRICS;

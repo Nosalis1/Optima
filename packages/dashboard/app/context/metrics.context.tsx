@@ -40,7 +40,6 @@ export type MetricsData = {
 export type AnalyticsFilterSettings = {
     query: string;
     method: 'ALL' | 'GET' | 'POST' | 'PUT' | 'DELETE';
-    status: 'ALL' | '2xx' | '4xx' | '5xx';
     page: number;
 };
 
@@ -68,7 +67,6 @@ export function MetricsProvider({
     const [filters, setFilters] = React.useState<AnalyticsFilterSettings>({
         query: '',
         method: 'ALL',
-        status: 'ALL',
         page: 1
     });
     const filtersRef = React.useRef(filters);
@@ -77,7 +75,7 @@ export function MetricsProvider({
     const [selectedSessionSummary, setSelectedSessionSummary] = React.useState<SessionSummary | null>(null);
 
     function haveFilters(f: AnalyticsFilterSettings): boolean {
-        return f.query !== '' || f.method !== 'ALL' || f.status !== 'ALL' || f.page !== 1;
+        return f.query !== '' || f.method !== 'ALL' || f.page !== 1;
     }
 
     function appendTickData(newTick: DashboardTickData) {

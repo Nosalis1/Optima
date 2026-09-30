@@ -1,98 +1,49 @@
+import { randomUUID } from 'crypto';
 import type { TelemetryRequest } from '../domain';
 import type { ReadonlyConfig } from '../../config';
-import {
-    BucketStore,
-    DashboardStore,
-    AnalyticsStore,
-    HealthStore,
-    SystemStore,
-    EndpointStore,
-    AlertStore,
-    MetricsStore
-} from './stores';
+import { BucketStore, AlertStore, } from './stores';
 import { ApplicationEventManager } from '../organizers';
 import { PersistenceRepository } from './persistence.layer';
+import { AnomalyDetector } from './runtime/anomaly-detector';
+import { RuntimeStore } from './stores/runtime.store';
 
 export class LocalRepository {
-    // Standard Stores
-    readonly endpoint: EndpointStore;
     readonly alerts: AlertStore;
-    readonly metrics: MetricsStore;
-
-    // Historics Store
-    readonly health: HealthStore;
     readonly bucket: BucketStore;
+    readonly runtime: RuntimeStore;
 
-    // Core Stores
-    readonly dashboard: DashboardStore;
-    readonly analytics: AnalyticsStore;
-    readonly system: SystemStore;
+    private readonly anomaly = new AnomalyDetector();
 
     constructor(
         private readonly persistence: PersistenceRepository,
         private readonly config: ReadonlyConfig
     ) {
-        // Standard 
-        this.endpoint = new EndpointStore();
-        this.alerts = new AlertStore(
-            config.alertBufferSize
-        );
-        this.metrics = new MetricsStore();
-
-        // Historic
-        this.health = new HealthStore(
-            config.ringBufferSize,
-            config.publisher.eventLoopLagThresholdMs
-        );
+        this.alerts = new AlertStore(config.alertBufferSize);
+        this.runtime = new RuntimeStore(config);
         this.bucket = new BucketStore(
-            this.endpoint,
-            this.health,
-            this.metrics,
-            config.ringBufferSize
+            this.runtime,
+            {
+                sessionId: persistence.sessionId,
+                instanceId: randomUUID(),
+                intervalMs: 1000,
+                historySize: config.ringBufferSize,
+            }
         );
-
-        this.dashboard = new DashboardStore(
-            this.bucket,
-            this.health,
-            this.endpoint,
-            this.alerts
-        );
-        this.analytics = new AnalyticsStore(
-            this.bucket,
-            this.endpoint,
-            config.publisher.slowLatencyThresholdMs
-        );
-        this.system = new SystemStore();
     }
 
     record(request: TelemetryRequest): void {
-        const data = {
+        this.bucket.record({
             method: request.method,
             route: request.endpoint,
             duration: request.responseTime,
             statusCode: request.statusCode
-        };
-
-        this.endpoint.record(data);
-
-        const status = this.metrics.record({
-            duration: request.responseTime,
-            statusCode: request.statusCode
         });
 
-        if (status === 'ANOMALY') {
+        if (this.anomaly.record(request.responseTime)) {
             const reason = `Slow request: ${request.method} ${request.endpoint} took ${request.responseTime}ms`;
             this.alerts.warning(`Anomaly detected: ${reason}`);
-            void ApplicationEventManager.instance?.emit({
-                type: 'ANOMALY',
-                reason
-            });
+            void ApplicationEventManager.instance?.emit({ type: 'ANOMALY', reason });
         }
-
-        this.bucket.recordRequest(
-            request.method,
-            request.endpoint
-        );
 
         this.persistence.onHttpRequest({
             method: request.method,
@@ -103,7 +54,16 @@ export class LocalRepository {
         });
     }
 
-    tick(): void {
-        this.bucket.flush();
+    tick(): void { this.closeInterval(false); }
+
+    closeLastInterval(): void { this.closeInterval(true); }
+
+    private closeInterval(force: boolean): void {
+        const bucket = this.bucket.flush({ force });
+        if (!bucket) return;
+        void this.persistence.onBucketClosed(bucket)
+            .then(ok => {
+                if (ok) this.bucket.markCommitted(bucket.sequence);
+            });
     }
 }

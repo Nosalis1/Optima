@@ -30,7 +30,7 @@ export class SessionRegistry {
     get all(): readonly SessionRecord[] { return this.manifest.sessions; }
     get recoveredFromCrash(): boolean { return this._recoveredFromCrash; }
 
-    async start(): Promise<SessionRecord> {
+    async start(sessionId: string = randomUUID()): Promise<SessionRecord> {
         const raw = await tryOrDefault<any>(() => readJSON<any>(this.manifestPath), null);
         this.manifest = this.migrate(raw);
 
@@ -45,7 +45,7 @@ export class SessionRegistry {
         const number = this.manifest.sessions.reduce((m, s) => Math.max(m, s.sessionNumber), 0) + 1;
 
         this._current = {
-            sessionId: randomUUID(),
+            sessionId: sessionId,
             sessionNumber: number,
             startedAt: new Date().toISOString(),
             endedAt: null,
@@ -58,10 +58,12 @@ export class SessionRegistry {
         return this._current;
     }
 
-    notePersisted(): void {
+    notePersisted(committedSequence?: number): void {
         if (!this._current) return;
         this._current.lastPersistedAt = new Date().toISOString();
-        this._current.lastCommitedSequence = this.writer.commitedSequence;
+        if (committedSequence !== undefined) {
+            this._current.lastCommitedSequence = Math.max(this._current.lastCommitedSequence, committedSequence);
+        }
         this.dirty = true;
     }
 
