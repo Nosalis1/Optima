@@ -31,6 +31,8 @@ import { SessionRegistry } from './persistence/session-registry';
 import { ApplicationEventManager } from "../organizers";
 import Logger from "../telemetry/logger";
 import type { MetricBucket } from "./stores/bucket-metric";
+import { SegmentIndex } from "./persistence/segment-index";
+import type { CommittedBucketSource, QueryIssue, TelemetryQueryService } from "../telemetry/telemetry-query.service";
 
 type HttpMetricRecord = {
     method: string;
@@ -83,6 +85,9 @@ export class PersistenceRepository {
 
     readonly sessionId = randomUUID();
 
+    private readonly segments: SegmentIndex;
+    private queries: TelemetryQueryService | null = null;
+
     constructor(
         private readonly config: ReadonlyConfig
     ) {
@@ -103,10 +108,16 @@ export class PersistenceRepository {
         });
         this.registry = new SessionRegistry(path.join(this.baseDir, 'session-manifest.json'), this.writer);
 
+        this.segments = new SegmentIndex(this.baseDir);
         this.ready = this.initSession().catch(err => {
             Logger.error('Failed to initialize session:', err);
             return null;
         });
+    }
+
+    attachQueryService(q: TelemetryQueryService): void { this.queries = q; }
+    get bucketSource(): CommittedBucketSource {
+        return { read: (s, f, t, onIssue) => this.readBuckets(s, f, t, onIssue) };
     }
 
     //#region Initialization
@@ -118,6 +129,8 @@ export class PersistenceRepository {
         if (removed > 0) {
             Logger.debug(`PersistenceLayer: Removed ${removed} orphaned temporary files during initialization.`);
         }
+
+        await this.segments.rebuild();
 
         const session = await this.registry.start(this.sessionId);
         Logger.debug(`Session initialized: #${session.sessionNumber} (${session.sessionId}), recoveredFromCrash=${this.registry.recoveredFromCrash}`);
@@ -171,9 +184,9 @@ export class PersistenceRepository {
         const session = await this.ready;
         if (!session) return false;
         try {
-            //! Change after next step, write the whole bucket instead of analized data
-            // await this.writer.enqueueAppend(this.baseDir, 'metric_buckets', [{ recordId: bucket.bucketId, payload: bucket }]);
-            // this.registry.notePersisted(bucket.sequence);
+            await this.writer.enqueueAppend(this.baseDir, 'metric_buckets', [{ recordId: bucket.bucketId, payload: bucket }], { date: new Date(bucket.endTime) });
+            this.segments.noteWritten(bucket);
+            this.registry.notePersisted(bucket.sequence);
             return true;
         } catch {
             return false;
@@ -257,6 +270,7 @@ export class PersistenceRepository {
         return null;
     }
 
+    //! Deprecated, we now use difference method
     async getSessionSummary(sessionNumber: number, windowHours = 24): Promise<SessionSummary | null> {
         const session = await this.findSession(sessionNumber);
         if (!session) return null;
@@ -367,6 +381,20 @@ export class PersistenceRepository {
         };
     }
 
+    async *readBuckets(sessionId: string, fromMs: number, toMs: number, onIssue: (i: QueryIssue) => void): AsyncGenerator<MetricBucket> {
+        for (const date of this.segments.find(sessionId, fromMs, toMs)) {
+            const file = await this.resolveExistingFile('metric_buckets', date);
+            if (!file) { onIssue({ type: 'SOURCE_ERROR', detail: `Missing segment ${date}` }); continue; }
+            const records = dedupeRecords(readRecords<MetricBucket>(file), id => onIssue({ type: 'CONFLICT', bucketId: id }));
+            for await (const rec of records) {
+                const b = rec.payload;
+                if (b?.schemaVersion !== 2 || b.sessionId !== sessionId) continue;
+                if (Date.parse(b.startTime) > toMs || Date.parse(b.endTime) < fromMs) continue;
+                yield b;
+            }
+        }
+    }
+
     //#endregion
 
     //#region Shutdown
@@ -384,6 +412,7 @@ export class PersistenceRepository {
                 await this.flushHttpBuffer();
                 await this.writer.whenIdle();
                 await this.registry.complete();
+                await this.segments.persistClosed();
                 await this.writer.close();
 
                 const removed = await cleanupOrphanedTempFiles(this.baseDir);
@@ -420,12 +449,13 @@ export class PersistenceRepository {
     }
 
     archiveAllCategories(): void {
-        const categories: PersistenceCategory[] = ['http_requests', 'system_health', 'events', 'correlation'];
+        const categories: PersistenceCategory[] = ['http_requests', 'system_health', 'events', 'correlation', 'metric_buckets'];
         for (const category of categories) {
             this.archiveOldCategory(category).catch(err => {
                 Logger.error(`Error archiving old ${category} files`, err);
             });
         }
+        void this.segments.persistClosed();
     }
 
     //#endregion

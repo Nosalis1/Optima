@@ -2,7 +2,7 @@ import * as fsp from 'fs/promises';
 import Logger from '../../telemetry/logger';
 import { constructFilePath, type StoredRecord } from '../utility/index';
 
-export type PersistenceCategory = 'http_requests' | 'system_health' | 'events' | 'correlation';
+export type PersistenceCategory = 'http_requests' | 'system_health' | 'events' | 'correlation' | 'metric_buckets';
 
 export type StorageStatus = 'OK' | 'DEGRADED';
 
@@ -53,7 +53,7 @@ export class PersistenceWriter {
     get commitedSequence(): number { return this._commitedSequence; }
     get pending(): number { return this.queue.length; }
 
-    enqueueAppend<T>(baseDir: string, category: PersistenceCategory, items: RecordInput<T>[]): Promise<number> {
+    enqueueAppend<T>(baseDir: string, category: PersistenceCategory, items: RecordInput<T>[], opts: { date?: Date } = {}): Promise<number> {
         if (items.length === 0) return Promise.resolve(this._commitedSequence);
 
         const createdAt = new Date().toISOString();
@@ -73,7 +73,7 @@ export class PersistenceWriter {
             return Promise.reject(new Error(`Serialization failed for ${category}: ${err}`));
         }
 
-        const filePath = constructFilePath({ baseDir, category });
+        const filePath = constructFilePath({ baseDir, category, date: opts.date });
 
         return this.push({
             description: `Append ${records.length} records to ${filePath}`,

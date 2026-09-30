@@ -34,6 +34,7 @@ export class BucketStore {
     private readonly maxEndpoints: number;
     private sequence = 0;
     private lastCommitted = 0;
+    private readonly committed = new Set<number>();
     private open: OpenInterval;
 
     constructor(
@@ -113,7 +114,12 @@ export class BucketStore {
         return bucket;
     }
 
-    markCommitted(sequence: number): void { this.lastCommitted = Math.max(this.lastCommitted, sequence); }
+    markCommitted(sequence: number): void {
+        this.committed.add(sequence);
+        const oldest = this.history.values()[0]?.sequence ?? sequence;
+        for (const s of this.committed) if (s < oldest) this.committed.delete(s);
+    }
+    isCommitted(sequence: number): boolean { return this.committed.has(sequence); }
     get lastCommittedSequence(): number { return this.lastCommitted; }
     getHistory(): MetricBucket[] { return this.history.values(); }
     latest(): MetricBucket | undefined { return this.history.latest(); }

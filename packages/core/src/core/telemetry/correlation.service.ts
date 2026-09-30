@@ -11,17 +11,23 @@ import Logger from './logger';
 import {
     deriveMetrics,
 } from '../storage/stores/bucket-metric';
+import type { SeriesPoint, TelemetryQueryService } from './telemetry-query.service';
 
-type HistoryEntry = ReturnType<LocalRepository['bucket']['getHistory']>[number];
+type HistoryEntry = SeriesPoint;
 
 interface Metric {
     label: string;
     select: (entry: HistoryEntry) => number;
 }
 
+//! NOW USING THIS
+/*
+    const dashboardData = queries.recent(60, { consistency: 'live' });
+*/
+
 const METRICS = {
-    rps: { label: 'RPS', select: e => e.requests.requestCount },
-    errorRate: { label: 'error rate', select: e => e.requests.clientErrorCount + e.requests.serverErrorCount / e.requests.requestCount },
+    rps: { label: 'RPS', select: e => deriveMetrics(e.requests, e.durationMs).rps },
+    errorRate: { label: 'error rate', select: e => deriveMetrics(e.requests, e.durationMs).errorRate },
     heapUsage: { label: 'heap memory', select: e => e.runtime.memoryUsage.heapUsage },
     p95Latency: { label: 'p95 latency', select: e => deriveMetrics(e.requests, e.durationMs).p95 },
     averageLatency: { label: 'average latency', select: e => deriveMetrics(e.requests, e.durationMs).averageLatency },
@@ -56,17 +62,20 @@ interface CorrelationServiceOptions {
     maxWindow?: number;
     analysisIntervalMs?: number;
     alertCooldownMs?: number;
+    consistency?: 'live' | 'committed';
 }
 
 export class CorrelationService {
     readonly requiredSampleSize: number;
 
     private readonly storage: LocalRepository;
+    private readonly queries: TelemetryQueryService;
     private readonly strongThreshold: number;
     private readonly maxLag: number;
     private readonly maxWindow: number;
     private readonly analysisIntervalMs: number;
     private readonly alertCooldownMs: number;
+    private readonly consistency: 'live' | 'committed';
 
     private lastRunAt = Number.NEGATIVE_INFINITY;
     private lastAlertAt = Number.NEGATIVE_INFINITY;
@@ -79,9 +88,11 @@ export class CorrelationService {
 
     constructor(
         storage: LocalRepository,
+        queries: TelemetryQueryService,
         options: CorrelationServiceOptions = {}
     ) {
         this.storage = storage;
+        this.queries = queries;
         this.requiredSampleSize = calculateSampleSizeCorrelation(
             options.minCorrelation ?? 0.5,
             options.alpha ?? 0.05,
@@ -92,6 +103,7 @@ export class CorrelationService {
         this.maxWindow = Math.max(options.maxWindow ?? 300, this.requiredSampleSize);
         this.analysisIntervalMs = options.analysisIntervalMs ?? 1000;
         this.alertCooldownMs = options.alertCooldownMs ?? 30000;
+        this.consistency = options.consistency ?? 'committed';
     }
 
     getResults(): CorrelationPairResult[] {
@@ -113,7 +125,20 @@ export class CorrelationService {
         if (now - this.lastRunAt < this.analysisIntervalMs) return;
         this.lastRunAt = now;
 
-        const history = this.storage.bucket.getHistory().slice(-this.maxWindow);
+        const query = this.queries.recent(this.maxWindow, {
+            consistency: this.consistency
+        });
+        const history = query.points;
+
+        if (!query.complete) {
+            this.results = [];
+            this.assessment = {
+                status: 'INSUFFICIENT_DATA',
+                evidence: [],
+                recommendation: `The observed series is incomplete (${query.issues.map(i => i.type).join(', ')}); analysis skipped.`
+            };
+            return;
+        }
 
         const results: CorrelationPairResult[] = [];
         for (const pair of PAIRS) {

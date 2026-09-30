@@ -8,11 +8,22 @@ import {
     type MetricBucket
 } from '../storage/stores/bucket-metric';
 import { deriveEndpointView } from '../storage/stores/bucket-view';
+import type { SeriesPoint } from './telemetry-query.service';
 
 const DASHBOARD_HISTORY_LENGTH = 60;
 const MAX_IMPACT_ENDPOINTS = 10;
 const MAX_ALERTS = 5;
 const IMPACT_P95_THRESHOLD_MS = 500;
+
+type Derived = ReturnType<typeof deriveMetrics>;
+
+interface Snapshot {
+    points: SeriesPoint[];
+    derived: Derived[];
+    latest: SeriesPoint;
+    latestDerived: Derived;
+    sequence: number;
+}
 
 export class DashboardService {
     constructor(

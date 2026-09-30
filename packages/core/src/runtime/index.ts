@@ -6,10 +6,13 @@ import { TelemetryService } from '../core/telemetry/telemetry.service';
 import { DashboardService } from "../core/telemetry/dashboard.service";
 import { AnalyticsService } from '../core/telemetry/analytics.service';
 import { RuntimeService } from '../core/telemetry/runtime.service';
+import { TelemetryQueryService } from '../core/telemetry/telemetry-query.service';
 
 export interface OptimaRuntimeDependencies {
     storage: LocalRepository;
     persistence: PersistenceRepository;
+
+    queries: TelemetryQueryService;
 
     dashboard: DashboardService;
     analytics: AnalyticsService;
@@ -24,6 +27,18 @@ export function createOptimaRuntime(config: ReadonlyConfig): OptimaRuntimeDepend
     const persistence = new PersistenceRepository(config);
     const storage = new LocalRepository(persistence, config);
 
+    const queries = new TelemetryQueryService({
+        committed: persistence.bucketSource,
+        live: {
+            snapshot: () => storage.bucket.getHistory().map(bucket => ({
+                bucket,
+                committed: storage.bucket.isCommitted(bucket.sequence)
+            })),
+        },
+        currentSessionId: () => persistence.sessionId
+    });
+    persistence.attachQueryService(queries);
+
     const dashboard = new DashboardService(storage);
     const analytics = new AnalyticsService(storage, config);
     const runtime = new RuntimeService(storage, config);
@@ -35,12 +50,13 @@ export function createOptimaRuntime(config: ReadonlyConfig): OptimaRuntimeDepend
         runtime,
         config
     );
-    const correlation = new CorrelationService(storage);
+    const correlation = new CorrelationService(storage, queries);
     const telemetry = new TelemetryService(storage, config);
 
     return {
         storage,
         persistence,
+        queries,
         collector,
         dashboard,
         analytics,
