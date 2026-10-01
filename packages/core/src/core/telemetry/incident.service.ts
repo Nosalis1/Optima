@@ -167,8 +167,8 @@ export interface IncidentServiceDeps {
     emit?: (event: { type: ApplicationEventType; reason: string; details: Record<string, unknown> }) => unknown;
 }
 
-export interface IncidentServiceOptions extends IncidentRuleOptions, Partial<IncidentTiming> {
-    historySize?: number;
+export interface IncidentServiceOptions extends Required<IncidentRuleOptions>, IncidentTiming {
+    historySize: number;
     rules?: IncidentRule[];
 }
 
@@ -190,24 +190,16 @@ export class IncidentService {
 
     constructor(
         private readonly deps: IncidentServiceDeps,
-        options: IncidentServiceOptions = {}
+        options: IncidentServiceOptions
     ) {
         this.timing = {
-            pendingForMs: options.pendingForMs ?? 30_000,
-            recoveryForMs: options.recoveryForMs ?? 60_000,
-            resolvedHoldMs: options.resolvedHoldMs ?? 5 * 60_000,
+            pendingForMs: options.pendingForMs,
+            recoveryForMs: options.recoveryForMs,
+            resolvedHoldMs: options.resolvedHoldMs,
         };
-        const ruleOptions: Required<IncidentRuleOptions> = {
-            windowIntervals: options.windowIntervals ?? 10,
-            minRequests: options.minRequests ?? 20,
-            serverErrorRate: options.serverErrorRate ?? 0.05,
-            p95LatencyMs: options.p95LatencyMs ?? 500,
-            eventLoopLagMs: options.eventLoopLagMs ?? 100,
-            recoveryRatio: options.recoveryRatio ?? 0.8,
-        };
-        this.windowIntervals = ruleOptions.windowIntervals;
-        this.historySize = Math.max(1, options.historySize ?? 100);
-        const rules = options.rules ?? defaultIncidentRules(ruleOptions);
+        this.windowIntervals = options.windowIntervals;
+        this.historySize = options.historySize;
+        const rules = options.rules ?? defaultIncidentRules(options);
         this.entries = rules.map(rule => ({ rule, tracker: initialTracker(), last: null, incident: null }));
     }
 

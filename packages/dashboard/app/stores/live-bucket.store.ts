@@ -1,7 +1,11 @@
 import type { BucketsMessage, LiveBucketDto, DashboardData, HealthData, HealthDetails } from '../domain';
 
-export const DASHBOARD_WINDOW = 60;
-const NOMINAL_INTERVAL_S = 1;
+export interface WindowSettings {
+    length: number;
+    intervalS: number;
+}
+
+export const FALLBACK_WINDOW: WindowSettings = { length: 60, intervalS: 1 };
 const MAX_BUCKETS = 240;
 const MAX_UNRECOVERABLE = 2000;
 
@@ -85,7 +89,7 @@ export interface DashboardWindow {
     firstMissingGapFilled: boolean;
 }
 
-export function selectWindow(state: LiveBucketsState, length: number = DASHBOARD_WINDOW): DashboardWindow {
+export function selectWindow(state: LiveBucketsState, { length, intervalS }: WindowSettings): DashboardWindow {
     const bySeq = new Map<number, LiveBucketDto>();
     for (const b of state.buckets.values()) bySeq.set(b.sequence, b);
 
@@ -111,7 +115,7 @@ export function selectWindow(state: LiveBucketsState, length: number = DASHBOARD
     for (let i = points.length - 1; i >= 0; i--) {
         const b = points[i];
         if (b && anchor !== null) times[i] = (Date.parse(b.endTime) - anchor) / 1000;
-        else times[i] = i === points.length - 1 ? 0 : times[i + 1] - NOMINAL_INTERVAL_S;
+        else times[i] = i === points.length - 1 ? 0 : times[i + 1] - intervalS;
     }
 
     return { points, times, latest: newest ?? null, missing, firstMissingGapFilled: missing.length === 0 };
@@ -169,10 +173,10 @@ export function toDashboardSeries(window: DashboardWindow): Series {
     };
 }
 
-export function emptyDashboardSeries(): Series {
-    const empty: Array<number | null> = Array(DASHBOARD_WINDOW).fill(null);
+export function emptyDashboardSeries(length: number): Series {
+    const empty: Array<number | null> = Array(length).fill(null);
     return {
-        timeline: Array.from({ length: DASHBOARD_WINDOW }, (_, i) => i - DASHBOARD_WINDOW + 1),
+        timeline: Array.from({ length }, (_, i) => i - length + 1),
         current: {
             rps: 0,
             latency: 0,

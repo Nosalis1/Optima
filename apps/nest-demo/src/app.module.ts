@@ -6,16 +6,20 @@ import { MetricsModule } from 'apm-optima/nest';
 @Module({
     imports: [
         MetricsModule.forRoot({
-            dashboardPath: '/optima-metrics',
+            dashboard: {
+                path: '/optima-metrics',
+            },
             simulation: {
-                intervalMs: 100,
-                requestsPerTick: 20,
+                intervalMs: 200,
+                requestsPerTick: 250,
             },
             publisher: {
                 intervalMs: 1000,
-                slowLatencyThresholdMs: 500,
-                eventLoopLagThresholdMs: 100,
-                eventLoopResolutionMs: 20,
+            },
+            persistence: {
+                baseDir: 'metrics_data',
+                maxBufferSize: 1000,
+                persistRawRequests: true,
             },
             tickIntervalMs: 250,
         })

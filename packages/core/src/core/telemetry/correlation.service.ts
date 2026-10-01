@@ -10,7 +10,6 @@ import type { TelemetryQueryService, SeriesPoint } from './telemetry-query.servi
 import { verifyFinding, type ReplayOutcome } from './utility/correlation-replay';
 import {
     CORRELATION_METHOD_VERSION,
-    DEFAULT_CORRELATION_WINDOW,
     INPUT_SCHEMA_VERSION,
     evaluationKey,
     findingIdFor,
@@ -41,19 +40,20 @@ export interface CorrelationDeps {
     identity: { sessionId: () => string; instanceId: string; };
 }
 
-interface CorrelationServiceOptions {
-    minCorrelation?: number;
-    alpha?: number;
-    power?: number;
-    strongThreshold?: number;
-    maxLag?: number;
-    maxWindow?: number;
-    minCoverage?: number;
-    analysisIntervalMs?: number;
-    transform?: CorrelationTransform;
-    scopes?: CorrelationScope[];
-    evaluateEveryIntervals?: number;
+export interface CorrelationServiceOptions {
+    minCorrelation: number;
+    alpha: number;
+    power: number;
+    strongThreshold: number;
+    maxLag: number;
+    maxWindow: number;
+    minCoverage: number;
+    evaluateEveryIntervals: number;
+    analysisIntervalMs: number;
 }
+
+const TRANSFORM: CorrelationTransform = 'raw';
+const SCOPES: CorrelationScope[] = [{}];
 
 type UiResult = CorrelationPairResult & { findingId: string };
 
@@ -82,30 +82,30 @@ export class CorrelationService {
 
     constructor(
         deps: CorrelationDeps,
-        options: CorrelationServiceOptions = {}
+        options: CorrelationServiceOptions
     ) {
         this.deps = deps;
 
         this.requiredSampleSize = calculateSampleSizeCorrelation(
-            options.minCorrelation ?? 0.5,
-            options.alpha ?? 0.05,
-            options.power ?? 0.8
+            options.minCorrelation,
+            options.alpha,
+            options.power
         );
         this.parameters = {
             requiredSampleSize: this.requiredSampleSize,
-            minCorrelation: options.minCorrelation ?? 0.5,
-            alpha: options.alpha ?? 0.05,
-            power: options.power ?? 0.8,
-            strongThreshold: options.strongThreshold ?? 0.7,
-            maxLag: options.maxLag ?? 5,
-            maxWindow: Math.max(options.maxWindow ?? DEFAULT_CORRELATION_WINDOW, this.requiredSampleSize),
-            minCoverage: options.minCoverage ?? 0.8,
+            minCorrelation: options.minCorrelation,
+            alpha: options.alpha,
+            power: options.power,
+            strongThreshold: options.strongThreshold,
+            maxLag: options.maxLag,
+            maxWindow: Math.max(options.maxWindow, this.requiredSampleSize),
+            minCoverage: options.minCoverage,
             gapPolicy: 'compact',
         };
-        this.transform = options.transform ?? 'raw';
-        this.scopes = options.scopes?.length ? options.scopes : [{}];
-        this.analysisIntervalMs = options.analysisIntervalMs ?? 1000;
-        this.evaluateEvery = Math.max(1, options.evaluateEveryIntervals ?? 10);
+        this.transform = TRANSFORM;
+        this.scopes = SCOPES;
+        this.analysisIntervalMs = options.analysisIntervalMs;
+        this.evaluateEvery = options.evaluateEveryIntervals;
     }
 
     getResults(): CorrelationPairResult[] { return this.results; }

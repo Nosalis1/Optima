@@ -12,7 +12,7 @@ export class RuntimeService {
         private readonly storage: LocalRepository,
         private readonly config: ReadonlyConfig
     ) {
-        this.eventLoopLagThresholdMs = config.publisher.eventLoopLagThresholdMs;
+        this.eventLoopLagThresholdMs = config.thresholds.eventLoopLagMs;
         this.env = process.env.NODE_ENV ?? 'unknown';
         this.nodeVersion = process.version;
         this.startedAt = Date.now();

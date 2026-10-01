@@ -1,7 +1,29 @@
 import type { TelemetryRequest } from '../domain';
 import type { ReadonlyConfig } from '../../config';
 
+function globToRegExp(glob: string): RegExp {
+    let source = '';
+    for (let i = 0; i < glob.length; i++) {
+        const char = glob[i];
+        if (char === '*') {
+            if (glob[i + 1] === '*') {
+                const slash = glob[i + 2] === '/';
+                source += slash ? '(?:.*/)?' : '.*';
+                i += slash ? 2 : 1;
+            } else {
+                source += '[^/]*';
+            }
+        } else if (char === '?') {
+            source += '[^/]';
+        } else {
+            source += char.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+        }
+    }
+    return new RegExp(`^${source}$`);
+}
+
 export class TelemetryService {
+    private readonly excludePatterns: RegExp[];
     private inFlight = 0;
     private drainWaiters: Array<() => void> = [];
 
@@ -9,20 +31,14 @@ export class TelemetryService {
         private readonly storage: {
             record(request: TelemetryRequest): void;
         },
-        private readonly config: ReadonlyConfig
-    ) { }
+        config: ReadonlyConfig
+    ) {
+        this.excludePatterns = config.collection.excludePaths.map(globToRegExp);
+    }
 
     private isPathExcluded(endpoint: string): boolean {
         const cleanPath = endpoint.split('?')[0];
-        const userConfig = this.config;
-
-        const configuredPaths = userConfig?.excludePaths || [];
-        const allPatterns = [...configuredPaths];
-
-        return allPatterns.some(pattern => {
-            const cleanPattern = pattern.replace(/\*/g, '');
-            return cleanPath.includes(cleanPattern);
-        });
+        return this.excludePatterns.some(pattern => pattern.test(cleanPath));
     }
 
     track(): () => void {

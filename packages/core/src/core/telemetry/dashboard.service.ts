@@ -2,11 +2,14 @@ import { deriveMetrics, deriveRuntime } from '../storage/stores/bucket-metric';
 import type { TelemetryQueryService, SeriesPoint, QueryIssue } from './telemetry-query.service';
 import type { BucketsMessage, BucketsRequest, LiveBucketDto } from '../domain';
 
-const LIVE_WINDOW = 5;
-const DEFAULT_BACKFILL_LIMIT = 120;
 const MAX_BACKFILL_LIMIT = 600;
 const FALLBACK_BACKFILL_MS = 10 * 60_000;
-const MAX_BACKFILL_AGE_MS = 60 * 60_000;
+
+export interface DashboardServiceOptions {
+    liveWindow: number;
+    backfillLimit: number;
+    maxBackfillAgeMs: number;
+}
 
 export function toLiveBucketDto(sessionId: string, p: SeriesPoint): LiveBucketDto {
     const m = deriveMetrics(p.requests, p.durationMs);
@@ -46,7 +49,8 @@ export function toLiveBucketDto(sessionId: string, p: SeriesPoint): LiveBucketDt
 export class DashboardService {
     constructor(
         private readonly queries: TelemetryQueryService,
-        private readonly currentSessionId: () => string
+        private readonly currentSessionId: () => string,
+        private readonly options: DashboardServiceOptions
     ) { }
 
     /**
@@ -55,7 +59,7 @@ export class DashboardService {
      */
     getLive(): BucketsMessage | null {
         const sessionId = this.currentSessionId();
-        const result = this.queries.recent(LIVE_WINDOW, { consistency: 'live' });
+        const result = this.queries.recent(this.options.liveWindow, { consistency: 'live' });
         if (result.points.length === 0) return null;
 
         const buckets = result.points.map(p => toLiveBucketDto(sessionId, p));
@@ -74,7 +78,7 @@ export class DashboardService {
 
     async getBackFill(req: BucketsRequest): Promise<BucketsMessage> {
         const sessionId = this.currentSessionId();
-        const limit = Math.min(Math.max(1, Math.floor(req.limit ?? DEFAULT_BACKFILL_LIMIT)), MAX_BACKFILL_LIMIT);
+        const limit = Math.min(Math.max(1, Math.floor(req.limit ?? this.options.backfillLimit)), MAX_BACKFILL_LIMIT);
         const after = req.sessionId === sessionId && typeof req.afterSequence === 'number' && req.afterSequence >= 0
             ? Math.floor(req.afterSequence) : null;
 
@@ -107,7 +111,7 @@ export class DashboardService {
             ?? this.queries.liveBucket(after + 1)?.startTime
             ?? req.afterEndTime;
         const requestedFrom = known ? Date.parse(known) : now - FALLBACK_BACKFILL_MS;
-        const from = Math.max(Number.isNaN(requestedFrom) ? now - FALLBACK_BACKFILL_MS : requestedFrom, now - MAX_BACKFILL_AGE_MS);
+        const from = Math.max(Number.isNaN(requestedFrom) ? now - FALLBACK_BACKFILL_MS : requestedFrom, now - this.options.maxBackfillAgeMs);
 
         const result = await this.queries.query({
             sessionId,

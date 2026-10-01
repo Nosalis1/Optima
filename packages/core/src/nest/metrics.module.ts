@@ -6,6 +6,8 @@ import {
     DynamicModule,
     NestModule,
     MiddlewareConsumer,
+    Inject,
+    RequestMethod,
 } from "@nestjs/common";
 import { APP_INTERCEPTOR } from "@nestjs/core";
 
@@ -19,7 +21,8 @@ import {
 } from '../config';
 import fs from 'fs';
 import Logger from '../core/telemetry/logger';
-import { createOptimaRuntime } from '../runtime';
+import { createOptimaRuntime, type OptimaRuntimeDependencies } from '../runtime';
+import { createSessionExportHandler, sessionExportRoute } from '../adapters/session-export.handler';
 
 @Global()
 @Module({
@@ -35,6 +38,11 @@ import { createOptimaRuntime } from '../runtime';
     exports: ['METRICS_CONFIG', 'OPTIMA_RUNTIME_DEPENDENCIES'],
 })
 export class MetricsModule implements NestModule {
+    constructor(
+        @Inject('OPTIMA_RUNTIME_DEPENDENCIES')
+        private readonly dependencies: OptimaRuntimeDependencies,
+    ) { }
+
     static forRoot(options?: ConfigOptions): DynamicModule {
         ConfigManager.getInstance().initialize(options);
         const dependencies = createOptimaRuntime(ConfigManager.getInstance().get());
@@ -56,13 +64,13 @@ export class MetricsModule implements NestModule {
     }
 
     configure(consumer: MiddlewareConsumer) {
-        const config = ConfigManager.getInstance().get();
+        const config = this.dependencies.config;
 
-        if (config.dashboardPath === false) {
+        if (config.dashboard === false) {
             return;
         }
 
-        const dashboardRoute = config.dashboardPath;
+        const dashboardRoute = config.dashboard.path;
 
         const dashboardDir = path.join(__dirname, '../../dashboard-out');
         const indexHtmlPath = path.join(dashboardDir, 'index.html');
@@ -71,6 +79,10 @@ export class MetricsModule implements NestModule {
             Logger.error(`Dashboard not found at ${indexHtmlPath}. Please build the dashboard first.`);
             return;
         }
+
+        consumer
+            .apply(createSessionExportHandler(this.dependencies.persistence))
+            .forRoutes({ path: sessionExportRoute(dashboardRoute), method: RequestMethod.GET });
 
         consumer
             .apply(

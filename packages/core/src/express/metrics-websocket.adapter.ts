@@ -17,7 +17,8 @@ import {
     WebSocketEvents,
     parseBucketsRequest
 } from '../core/delivery';
-import { ConfigManager } from '../config';
+import { toClientConfig, type ReadonlyConfig } from '../config';
+import { socketServerOptions } from '../adapters/socket.options';
 import Logger from '../core/telemetry/logger';
 
 export class ExpressWebSocketAdapter implements WebSocketAdapter {
@@ -29,7 +30,8 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
         private readonly provider: MetricsDataProvider,
         private readonly sessionProvider: SessionDataProvider,
         private readonly correlationProvider: CorrelationDataProvider,
-        private readonly incidentProvider: IncidentDataProvider
+        private readonly incidentProvider: IncidentDataProvider,
+        private readonly config: ReadonlyConfig
     ) { }
 
     init(): void {
@@ -38,25 +40,7 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
             return;
         }
 
-        this.io = new SocketIOServer(
-            this.server,
-            {
-                transports: ['polling', 'websocket'],
-
-                path: '/socket.io/',
-
-                maxHttpBufferSize: 1e8, // 100MB
-
-                pingTimeout: 10000, // 10 seconds
-                pingInterval: 25000, // 25 seconds
-
-                cors: {
-                    origin: true,
-                    credentials: true,
-                    methods: ['GET', 'POST'],
-                },
-            },
-        );
+        this.io = new SocketIOServer(this.server, socketServerOptions(this.config.transport));
         this.isClosed = false;
         Logger.debug('WebSocket server initialized successfully.');
 
@@ -107,7 +91,7 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
             () => {
                 socket.emit(
                     WebSocketEvents.RESPONSE_CONFIGURATION,
-                    ConfigManager.getInstance().get()
+                    toClientConfig(this.config)
                 )
             }
         );
@@ -199,7 +183,8 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
             }
         );
 
-        socket.emit(WebSocketEvents.RESPONSE_SESSION_METADATA, this.sessionProvider.getSessionManifest());
+        void this.sessionProvider.getSessionManifest().then(manifest =>
+            socket.emit(WebSocketEvents.RESPONSE_SESSION_METADATA, manifest));
     }
 
     broadcast(

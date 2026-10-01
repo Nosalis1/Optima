@@ -1,39 +1,66 @@
 import { Card } from '@/app/components/cards/card';
 import type { CorrelationPairResult } from '../../domain';
+import { DIRECTION_SYMBOL, STATUS_COLOR, STATUS_LABEL, formatR } from './labels';
+
+function Group({ title, values }: { title: string; values: Array<[string, string]> }) {
+    return (
+        <div className="flex flex-col gap-1">
+            <p className="text-[10px] text-accent-soft uppercase tracking-wider font-semibold">{title}</p>
+            {values.map(([label, value]) => (
+                <div key={label} className="flex justify-between text-sm">
+                    <span className="text-accent-soft">{label}</span>
+                    <span className="text-foreground font-medium">{value}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 export function Detailed({ result }: { result: CorrelationPairResult | null }) {
-
-    if (result === null) return null;
-
-    function renderPart(label: string, value: any) {
+    if (result === null) {
         return (
-            <div className="space-y-1">
-                <p className="font-semibold">{label}:</p>
-                <p>{value}</p>
-            </div>
+            <Card header={{ title: 'Details' }} padding>
+                <p className="text-sm text-accent-soft">No pair selected.</p>
+            </Card>
         );
     }
 
+    const { analysis } = result;
+
     return (
-        <Card header={{ title: 'Detailed Result' }} padding>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderPart('Pair', `${result.xLabel} - ${result.yLabel}`)}
-                {renderPart('Status', result.analysis.status)}
-                {renderPart('Direction', result.analysis.direction)}
-                {renderPart('Pearson R', result.analysis.pearsonR)}
-                {renderPart('Spearman R', result.analysis.spearmanR)}
-                {renderPart('Raw Pearson R', result.analysis.rawPearsonR)}
-                {renderPart('Difference Pearson R', result.analysis.differencePearsonR)}
-                {renderPart('Determination', result.analysis.determination)}
-                {renderPart('Lag', result.analysis.lag)}
-                {renderPart('Lagged Pearson R', result.analysis.laggedPearsonR)}
-                {renderPart('Sample Size', result.analysis.sampleSize)}
-                {renderPart('Effective Sample Size', result.analysis.effectiveSampleSize)}
-                {renderPart('Required Sample Size', result.analysis.requiredSampleSize)}
-                {renderPart('Autocorrelation X', result.analysis.autocorrelationX)}
-                {renderPart('Autocorrelation Y', result.analysis.autocorrelationY)}
-                {renderPart('Trend Driven', result.analysis.trendDriven ? 'Yes' : 'No')}
-                {renderPart('Recommendation', result.analysis.recommendation)}
+        <Card header={{ title: 'Details', description: `${result.xLabel} → ${result.yLabel}` }} padding>
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold" style={{ color: STATUS_COLOR[analysis.status] }}>
+                        {STATUS_LABEL[analysis.status]}
+                    </span>
+                    <span className="text-sm text-accent-soft">
+                        {`${DIRECTION_SYMBOL[analysis.direction]} ${analysis.direction.toLowerCase()} (expected ${result.expectedDirection.toLowerCase()})`}
+                    </span>
+                </div>
+
+                <Group title="Strength" values={[
+                    ['Pearson r', formatR(analysis.pearsonR)],
+                    ['Spearman ρ', formatR(analysis.spearmanR)],
+                    ['Determination R²', formatR(analysis.determination)],
+                ]} />
+
+                <Group title="Time effects" values={[
+                    ['Raw Pearson r', formatR(analysis.rawPearsonR)],
+                    ['Differenced Pearson r', formatR(analysis.differencePearsonR)],
+                    ['Best lag', `${analysis.lag}`],
+                    ['Lagged Pearson r', formatR(analysis.laggedPearsonR)],
+                    ['Trend driven', analysis.trendDriven ? 'Yes' : 'No'],
+                ]} />
+
+                <Group title="Sample" values={[
+                    ['Sample size', `${analysis.sampleSize}`],
+                    ['Effective / required', `${Math.round(analysis.effectiveSampleSize)} / ${analysis.requiredSampleSize}`],
+                    ['Autocorrelation X', formatR(analysis.autocorrelationX)],
+                    ['Autocorrelation Y', formatR(analysis.autocorrelationY)],
+                ]} />
+
+                <p className="text-sm text-foreground border-t border-border pt-3">{analysis.recommendation}</p>
             </div>
         </Card>
     );

@@ -2,7 +2,7 @@
 import React from 'react';
 import { io, Socket } from "socket.io-client";
 import Loading from '../components/utility/loading';
-import type { ConfigOptions } from '../domain/config.types';
+import type { ClientConfig } from '../domain/config.types';
 
 const ConnectionContext = React.createContext<{
     isConnected: boolean;
@@ -12,7 +12,7 @@ const ConnectionContext = React.createContext<{
     unregisterEventListener: (event: WebSocketEvents, callback: (...args: any[]) => void) => void;
     emit: (event: WebSocketEvents, data: any) => void;
 
-    configuration: ConfigOptions | null;
+    configuration: ClientConfig | null;
 } | null>(null);
 
 export enum WebSocketEvents {
@@ -54,7 +54,7 @@ export function ConnectionProvider({
     const [isConnected, setIsConnected] = React.useState(false);
     const [isConnecting, setIsConnecting] = React.useState(true);
 
-    const [configuration, setConfiguration] = React.useState<ConfigOptions | null>(null);
+    const [configuration, setConfiguration] = React.useState<ClientConfig | null>(null);
 
     const socketRef = React.useRef<Socket | null>(null);
 
@@ -77,7 +77,7 @@ export function ConnectionProvider({
         );
         socketRef.current = socket;
 
-        const onConfiguration = (data: ConfigOptions) => setConfiguration(data);
+        const onConfiguration = (data: ClientConfig) => setConfiguration(data);
         socket.on(WebSocketEvents.RESPONSE_CONFIGURATION, onConfiguration);
 
         socket.on("connect", () => {

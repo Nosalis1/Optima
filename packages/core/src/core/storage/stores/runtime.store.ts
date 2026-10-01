@@ -69,7 +69,7 @@ export class RuntimeStore {
     constructor(
         readonly config: ReadonlyConfig
     ) {
-        this.loopDelay = monitorEventLoopDelay({ resolution: config.publisher.eventLoopResolutionMs });
+        this.loopDelay = monitorEventLoopDelay({ resolution: config.collection.eventLoopResolutionMs });
         this.loopDelay.enable();
         try {
             this.gcObserver = new PerformanceObserver(list => {

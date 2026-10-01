@@ -24,6 +24,8 @@ import {
     liveBucketsReducer,
     toDashboardSeries,
     toHealthData,
+    FALLBACK_WINDOW,
+    type WindowSettings,
     selectWindow,
     emptyDashboardSeries
 } from "../stores/live-bucket.store";
@@ -66,7 +68,12 @@ export type AnalyticsFilterSettings = {
 export function MetricsProvider({
     children
 }: { children: React.ReactNode }) {
-    const { isConnected, registerEventListener, unregisterEventListener, emit } = useConnection();
+    const { isConnected, registerEventListener, unregisterEventListener, emit, configuration } = useConnection();
+
+    const windowSettings = React.useMemo<WindowSettings>(() => configuration ? {
+        length: configuration.cache.viewWindowBuckets,
+        intervalS: configuration.collection.bucketIntervalMs / 1000,
+    } : FALLBACK_WINDOW, [configuration]);
 
     const subscriptionId = React.useRef(crypto.randomUUID());
     const backfillPending = React.useRef<{ afterSequence: number | null; timer: ReturnType<typeof setTimeout> } | null>(null);
@@ -75,7 +82,7 @@ export function MetricsProvider({
     const liveRef = React.useRef(live);
     React.useEffect(() => { liveRef.current = live; }, [live]);
 
-    const liveWindow = React.useMemo(() => selectWindow(live), [live]);
+    const liveWindow = React.useMemo(() => selectWindow(live, windowSettings), [live, windowSettings]);
 
     const [state, setData] = React.useState<MetricsState>({
         systemStatus: {
@@ -96,8 +103,8 @@ export function MetricsProvider({
     });
 
     const dashboard = React.useMemo<DashboardData>(
-        () => liveWindow.latest ? toDashboardSeries(liveWindow) : emptyDashboardSeries(),
-        [liveWindow]
+        () => liveWindow.latest ? toDashboardSeries(liveWindow) : emptyDashboardSeries(windowSettings.length),
+        [liveWindow, windowSettings]
     );
 
     const data = React.useMemo<MetricsData>(() => {
@@ -226,8 +233,8 @@ export function MetricsProvider({
     }
 
     async function downloadSession(sessionNumber: number) {
-        const basePath = window.location.origin;
-        const response = await fetch(`${basePath}/optima/session/${sessionNumber}/export`);
+        if (!configuration || configuration.dashboard === false) return;
+        const response = await fetch(`${window.location.origin}${configuration.dashboard.path}/session/${sessionNumber}/export`);
         if (!response.ok) throw new Error(`Failed to download session ${sessionNumber}: ${response.statusText}`);
 
         const blob = await response.blob();

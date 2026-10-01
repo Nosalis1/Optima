@@ -2,14 +2,16 @@ import {
     Request,
     Response
 } from 'express';
-import {
-    getConfig
-} from '../../config';
 
 class Logger {
     private static readonly RESET = '\x1b[0m';
     private static readonly BOLD = '\x1b[1m';
     private static readonly DIM = '\x1b[2m';
+    private static consoleLog = true;
+
+    static configure(options: { consoleLog: boolean }): void {
+        Logger.consoleLog = options.consoleLog;
+    }
 
     private static readonly COLORS = {
         GET: '\x1b[32m',    // Green
@@ -23,7 +25,7 @@ class Logger {
     };
 
     static log(req: Request, res: Response, duration: number): void {
-        if (!getConfig().consoleLog) return;
+        if (!Logger.consoleLog) return;
 
         const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
         const timeFormatted = `${duration.toFixed(2)}ms`.padStart(8, ' ');

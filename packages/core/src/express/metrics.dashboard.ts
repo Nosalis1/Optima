@@ -3,10 +3,11 @@ import path from 'path';
 import fs from 'fs';
 import Logger from '../core/telemetry/logger';
 import type { PersistenceRepository } from '../core/storage';
+import { createSessionExportHandler, sessionExportRoute } from '../adapters/session-export.handler';
 
 export function attachDashboard(
     app: express.Express,
-    routePath: string = '/dashboard',
+    routePath: string,
     persistence: PersistenceRepository
 ): void {
     const dashboardDir = path.join(__dirname, '../../dashboard-out');
@@ -17,25 +18,8 @@ export function attachDashboard(
         return;
     }
 
-    app.get(`/optima/session/:sessionNumber/export`, async (req, res) => {
-        if (isNaN(Number(req.params.sessionNumber))) {
-            res.status(400).send('Invalid session number');
-            return;
-        }
-        const sessionNumber = Number(req.params.sessionNumber);
-
-        const session = await persistence.findSession(sessionNumber);
-        if (!session) {
-            res.status(404).send('Session not found');
-            return;
-        }
-
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', `attachment; filename="session-${sessionNumber}-full.json"`);
-
-        await persistence.streamSessionExport(res, sessionNumber);
-        res.end();
-    });
+    const exportSession = createSessionExportHandler(persistence);
+    app.get(sessionExportRoute(routePath), (req, res) => { void exportSession(req, res); });
 
     app.use(routePath, express.static(dashboardDir));
 

@@ -11,17 +11,17 @@ export class LocalRepository {
 
     constructor(
         private readonly persistence: PersistenceRepository,
-        private readonly config: ReadonlyConfig,
-        options: { cacheSize?: number } = {}
+        private readonly conf: ReadonlyConfig
     ) {
-        this.runtime = new RuntimeStore(config);
+        this.runtime = new RuntimeStore(conf);
         this.bucket = new BucketStore(
             this.runtime,
             {
                 sessionId: persistence.sessionId,
                 instanceId: randomUUID(),
-                intervalMs: 1000,
-                historySize: Math.max(config.ringBufferSize, options.cacheSize ?? 0),
+                intervalMs: conf.collection.bucketIntervalMs,
+                historySize: conf.cache.liveBuckets,
+                maxEndpoints: conf.collection.maxEndpointsPerBucket,
             }
         );
     }

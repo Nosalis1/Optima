@@ -1,19 +1,22 @@
-import type { ReadonlyConfig } from "../../config";
+import { DEFAULT_CONFIG, type ReadonlyConfig } from "../../config";
 import type { AnalyticsData, AnalyticsFilterSettings, EndpointLatencyDistribution, EndpointTelemetry, EndpointVolume } from "../domain";
 import type { TelemetryQueryService } from "./telemetry-query.service";
 import { deriveEndpointView, type EndpointView } from "../storage/stores/bucket-view";
 import { paginate } from "../utility";
 
-const IMPACT_TOP = 5;
-
 export class AnalyticsService {
     readonly slowLatencyThreshold: number;
+    private readonly viewWindowBuckets: number;
+    private readonly topImpactRoutes: number;
 
     constructor(
         private readonly queries: TelemetryQueryService,
-        private readonly config: ReadonlyConfig
+        config: ReadonlyConfig
     ) {
-        this.slowLatencyThreshold = config.publisher.slowLatencyThresholdMs;
+        const dashboard = config.dashboard === false ? DEFAULT_CONFIG.dashboard : config.dashboard;
+        this.slowLatencyThreshold = config.thresholds.slowLatencyMs;
+        this.viewWindowBuckets = config.cache.viewWindowBuckets;
+        this.topImpactRoutes = dashboard.topImpactRoutes;
     }
 
     private matchesFilters(endpoint: EndpointView, filters: AnalyticsFilterSettings | undefined): boolean {
@@ -41,7 +44,7 @@ export class AnalyticsService {
     }
 
     get(page = 1, pageSize = 20, filters: AnalyticsFilterSettings | undefined = undefined): AnalyticsData {
-        const recent = this.queries.recent(this.config.ringBufferSize, { consistency: 'live', includeEndpoints: true });
+        const recent = this.queries.recent(this.viewWindowBuckets, { consistency: 'live', includeEndpoints: true });
         const endpointViews = deriveEndpointView(recent.points, this.slowLatencyThreshold);
 
         const endpointList = endpointViews.filter(e => this.matchesFilters(e, filters))
@@ -67,7 +70,7 @@ export class AnalyticsService {
         return endpoints
             .filter(e => e.impactedRequests > 0)
             .sort((a, b) => b.impactedRequests - a.impactedRequests || b.requestCount - a.requestCount)
-            .slice(0, IMPACT_TOP)
+            .slice(0, this.topImpactRoutes)
             .map(e => this.toTelemetry(e));
     }
 

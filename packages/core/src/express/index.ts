@@ -24,10 +24,10 @@ export function setupOptima(
     Logger.debug('Middlware for metrics collection has been registered successfully.');
 
     // Attaching the dashboard on provided path
-    if (config.dashboardPath !== false) {
-        attachDashboard(app, config.dashboardPath, dependencies.persistence);
+    if (config.dashboard !== false) {
+        attachDashboard(app, config.dashboard.path, dependencies.persistence);
 
-        Logger.debug(`Dashboard has been attached at path: ${config.dashboardPath}`);
+        Logger.debug(`Dashboard has been attached at path: ${config.dashboard.path}`);
     } else {
         Logger.debug('Dashboard attachment skipped as per configuration.');
     }

@@ -38,11 +38,8 @@ app.use(express.json());
 
 // Initialize Optima telemetry & embed UI
 const optima = setupOptima(app, {
-  dashboardPath: '/optima-metrics',
-  publisher: {
-    intervalMs: 1000,
-    slowLatencyThresholdMs: 500,
-  },
+  dashboard: { path: '/optima-metrics' },
+  thresholds: { slowLatencyMs: 500 },
 });
 
 app.get('/api/v1/resource', (req, res) => {
@@ -68,12 +65,9 @@ import { MetricsModule } from 'apm-optima/nest';
 @Module({
   imports: [
     MetricsModule.forRoot({
-      dashboardPath: '/optima-metrics',
-      publisher: {
-        intervalMs: 1000,
-        slowLatencyThresholdMs: 500,
-      },
-      excludePaths: ['/health'],
+      dashboard: { path: '/optima-metrics' },
+      thresholds: { slowLatencyMs: 500 },
+      collection: { excludePaths: ['/health'] },
     }),
   ],
 })
@@ -82,25 +76,55 @@ export class AppModule {}
 
 ## Configuration Options
 
+Every option is optional. Sections are merged field by field with the defaults, so setting one field keeps the defaults of the others. Values outside the allowed range are clamped. `persistence`, `dashboard` and `simulation` accept `false` (disabled), `true` (enabled with defaults) or an object.
+
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `applicationVersion` | `string` | `v1.0.0` | Version of currently running application, used for tracking session instances. |
-| `dashboardPath` | `string \| false` | `/optima-metrics` | Route endpoint for serving the embedded UI (`false` to disable). |
-| `simulation` | `false \| { intervalMs: number, requestsPerTick: number }` | `false` | Generates synthetic traffic for local testing and load simulation. |
-| `publisher.intervalMs` | `number` | `1000` | Broadcast interval (in ms) for pushing telemetry updates over WebSockets. |
-| `publisher.slowLatencyThresholdMs` | `number` | `500` | Latency limit in milliseconds above which requests are flagged as slow. |
-| `publisher.eventLoopLagThresholdMs` | `number` | `50` | Event Loop delay threshold in milliseconds for triggering lag alerts. |
-| `publisher.eventLoopResolutionMs` | `number` | `10` | Sampling resolution interval for computing Event Loop delay. |
-| `persistence` | `false \| Object` | `false` | Persist metrics data to disk as NDJSON files for long-term storage and historical analysis. |
-| `persistence.baseDir` | `string` | `./metrics_data` | Root directory where persisted metrics, events, and the session manifest are written. |
-| `persistence.maxBufferSize` | `number` | `200` | Number of buffered HTTP error records held in memory before an async flush to disk is triggered. |
-| `persistence.persistRawRequests` | `boolean` | `false` | Whether to persist individual HTTP error records (4xx/5xx) to disk, in addition to aggregated system health snapshots. |
-| `persistence.archiveIntervalMs` | `number` | `24 * 60 * 60 * 1000` | Interval for archiving old persistence files to save up on memory allocation. |
-| `tickIntervalMs` | `number` | `250` | Resolution interval for recalculating internal metrics and buckets. |
-| `excludePaths` | `string[]` | `['/_next/*','/_next/**','*.map','/favicon.ico','/metrics_pack']` | Array of route patterns or paths to skip from metric collection (e.g., `/health`). |
-| `consoleLog` | `boolean` | `false` | Enables logging internal system events and alerts to `stdout`. |
-| `ringBufferSize` | `number` | `60` | Capacity of the internal ring buffer used for storing time-series data. |
-| `alertBufferSize` | `number` | `100` | Maximum capacity of the buffer holding recent alerts and detected anomalies. |
+| `applicationVersion` | `string` | `1.0.0` | Version of the running application, stored with application events. |
+| `logging.consoleLog` | `boolean` | `true` | Logs every measured request to `stdout`. |
+| `collection.excludePaths` | `string[]` | `[]` | Glob patterns of routes that are not measured (`*` within one segment, `**` across segments). |
+| `collection.includeDefaultExcludes` | `boolean` | `true` | Also excludes `/_next/**`, `**/*.map`, `**/*.js`, `**/*.css`, `/favicon.ico`. The dashboard path is always excluded. |
+| `collection.bucketIntervalMs` | `number` | `1000` | Length of one measurement interval (bucket). |
+| `collection.maxEndpointsPerBucket` | `number` | `200` | Distinct routes per interval; the rest is grouped as overflow. |
+| `collection.eventLoopResolutionMs` | `number` | `20` | Sampling resolution of the event loop delay monitor. |
+| `thresholds.slowLatencyMs` | `number` | `500` | A request slower than this counts as slow (analytics, impact, incidents). |
+| `thresholds.eventLoopLagMs` | `number` | `100` | Event loop lag limit used by health and incidents. |
+| `cache.liveBuckets` | `number` | `300` | Closed intervals kept in memory; raised automatically to cover the correlation and incident windows. |
+| `cache.viewWindowBuckets` | `number` | `60` | Intervals shown in live charts, analytics and health. |
+| `persistence` | `false \| object` | enabled | Stores intervals, events and findings as NDJSON files. |
+| `persistence.baseDir` | `string` | `./metrics_data` | Directory for persisted data and the session manifest. |
+| `persistence.persistRawRequests` | `boolean` | `true` | Also stores individual 4xx/5xx requests. |
+| `persistence.maxBufferSize` | `number` | `1000` | Buffered error requests before a flush. |
+| `persistence.archiveIntervalMs` | `number` | `86400000` | How often closed daily files are compressed. |
+| `persistence.heartbeatIntervalMs` | `number` | `30000` | How often the running session record is updated. |
+| `persistence.shutdownDrainTimeoutMs` | `number` | `5000` | Max wait for in-flight requests on shutdown. |
+| `persistence.writer.maxQueue` / `maxRetries` / `retryDelayMs` | `number` | `1000` / `3` / `100` | Write queue capacity and retry policy. |
+| `incidents.windowIntervals` | `number` | `60` | Intervals in one evaluated window. |
+| `incidents.minRequests` | `number` | `100` | Requests needed in a window for it to be valid. |
+| `incidents.serverErrorRate` | `number` | `0.05` | 5xx share that breaches the error rule. |
+| `incidents.recoveryRatio` | `number` | `0.5` | Recovery requires values below `threshold × ratio`. |
+| `incidents.pendingForMs` / `recoveryForMs` / `resolvedHoldMs` | `number` | `30000` / `60000` / `30000` | How long a breach must last, how long recovery must last, how long RESOLVED is shown. |
+| `incidents.historySize` | `number` | `100` | Incidents kept in memory. |
+| `correlation.minCorrelation` / `alpha` / `power` | `number` | `0.5` / `0.05` / `0.8` | Used to compute the required sample size. |
+| `correlation.strongThreshold` | `number` | `0.7` | Coefficient above which an association is strong. |
+| `correlation.maxLag` | `number` | `10` | Largest lag (in intervals) checked. |
+| `correlation.maxWindow` | `number` | `60` | Intervals in the analysed window. |
+| `correlation.minCoverage` | `number` | `0.5` | Minimum share of valid intervals in the window. |
+| `correlation.evaluateEveryIntervals` | `number` | `10` | Evaluate (and store a finding) every N intervals. |
+| `dashboard` | `false \| object` | enabled | Embedded UI. |
+| `dashboard.path` | `string` | `/optima-metrics` | Route of the UI; session export is served at `<path>/session/:n/export`. |
+| `dashboard.liveWindow` | `number` | `60` | Intervals sent in each live update. |
+| `dashboard.backfillLimit` | `number` | `1000` | Intervals per backfill answer (capped at 600). |
+| `dashboard.maxBackfillAgeMs` | `number` | `86400000` | Oldest data a backfill may read. |
+| `dashboard.topImpactRoutes` | `number` | `10` | Routes in the impact table. |
+| `dashboard.analyticsPageSize` | `number` | `50` | Rows per analytics page. |
+| `dashboard.sessionSummaryWindowHours` | `number` | `24` | Hours covered by a session summary. |
+| `transport.socketPath` | `string` | `/socket.io/` | Socket.IO path (Express only; Nest uses the default). |
+| `transport.cors` | `string \| boolean` | `*` | Allowed origin for the dashboard socket. |
+| `transport.pingTimeoutMs` / `maxHttpBufferSize` | `number` | `5000` / `1048576` | Socket.IO connection settings (Express only). |
+| `publisher.intervalMs` | `number` | `1000` | How often data is pushed to the dashboard. |
+| `tickIntervalMs` | `number` | `250` | Internal timer that closes intervals and runs evaluations. |
+| `simulation` | `false \| object` | `false` | Synthetic traffic for local testing (`intervalMs` `100`, `requestsPerTick` `20`). |
 
 
 ## License

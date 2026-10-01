@@ -17,15 +17,10 @@ import Logger from '../core/telemetry/logger';
 import type { AnalyticsFilterSettings } from '../core/domain';
 import { Inject } from '@nestjs/common';
 import type { OptimaRuntimeDependencies } from '../runtime';
+import { DEFAULT_CONFIG, toClientConfig } from '../config';
+import { socketServerOptions } from '../adapters/socket.options';
 
-@WebSocketGateway({
-    transports: ['websocket'],
-
-    cors: {
-        origin: '*',
-        methods: ['GET', 'POST'],
-    },
-})
+@WebSocketGateway(socketServerOptions(DEFAULT_CONFIG.transport))
 export class NestWebSocketAdapter
     implements
     WebSocketAdapter,
@@ -139,6 +134,18 @@ export class NestWebSocketAdapter
         socket.emit(
             WebSocketEvents.RESPONSE_CORRELATION_DATA,
             this.dependencies.correlation.pack(),
+        );
+    }
+
+    @SubscribeMessage(
+        WebSocketEvents.REQUEST_CONFIGURATION,
+    )
+    handleConfiguration(
+        @ConnectedSocket() socket: Socket,
+    ): void {
+        socket.emit(
+            WebSocketEvents.RESPONSE_CONFIGURATION,
+            toClientConfig(this.dependencies.config),
         );
     }
 

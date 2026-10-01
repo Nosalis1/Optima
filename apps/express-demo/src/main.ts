@@ -16,16 +16,15 @@ const app = express();
 app.use(express.json());
 
 const optima = setupOptima(app, {
-    dashboardPath: '/optima-metrics',
+    dashboard: {
+        path: '/optima-metrics',
+    },
     simulation: {
         intervalMs: 200,
         requestsPerTick: 250,
     },
     publisher: {
         intervalMs: 1000,
-        slowLatencyThresholdMs: 500,
-        eventLoopLagThresholdMs: 100,
-        eventLoopResolutionMs: 20,
     },
     persistence: {
         baseDir: 'metrics_data',
@@ -33,7 +32,6 @@ const optima = setupOptima(app, {
         persistRawRequests: true,
     },
     tickIntervalMs: 250,
-    consoleLog: true,
 });
 
 app.get('/api/hello', (req, res) => {

@@ -32,7 +32,7 @@ export class IntervalManager {
             this.intervals.persistence = callbacks.persistence ? {
                 id: null,
                 callback: callbacks.persistence,
-                intervalMs: config.persistence.archiveIntervalMs ?? 24 * 60 * 60 * 1000,
+                intervalMs: config.persistence.archiveIntervalMs,
             } : null;
         }
         this.initialized = true;

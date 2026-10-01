@@ -1,7 +1,7 @@
 import path from "path";
 import fs from 'fs/promises';
 import { randomUUID } from "crypto";
-import { ReadonlyConfig } from "../../config";
+import { DEFAULT_CONFIG, type ReadonlyConfig } from "../../config";
 import {
     readRecords,
     cleanupOrphanedTempFiles,
@@ -39,14 +39,13 @@ type HttpMetricRecord = {
     timestamp: string;
 };
 
-const HEARTBEAT_INTERVAL_MS = 30_000;
-
 export class PersistenceRepository {
     private httpBuffer: RecordInput<HttpMetricRecord>[] = [];
     private readonly enabled: boolean;
     private readonly maxBufferSize: number;
     private readonly baseDir: string;
     private readonly persistRawRequests: boolean;
+    private readonly heartbeatIntervalMs: number;
 
     private readonly writer: PersistenceWriter;
     private readonly registry: SessionRegistry;
@@ -63,21 +62,19 @@ export class PersistenceRepository {
     private queries: TelemetryQueryService | null = null;
 
     constructor(
-        private readonly config: ReadonlyConfig
+        private readonly conf: ReadonlyConfig
     ) {
-        if (typeof config.persistence === 'boolean') {
-            this.enabled = config.persistence;
-            this.baseDir = './metrics_data';
-            this.maxBufferSize = 200;
-            this.persistRawRequests = false;
-        } else {
-            this.enabled = true;
-            this.baseDir = config.persistence.baseDir;
-            this.maxBufferSize = config.persistence.maxBufferSize ?? 200;
-            this.persistRawRequests = config.persistence.persistRawRequests ?? false;
-        }
+        const settings = conf.persistence === false ? DEFAULT_CONFIG.persistence : conf.persistence;
+        this.enabled = conf.persistence !== false;
+        this.baseDir = settings.baseDir;
+        this.maxBufferSize = settings.maxBufferSize;
+        this.persistRawRequests = settings.persistRawRequests;
+        this.heartbeatIntervalMs = settings.heartbeatIntervalMs;
 
         this.writer = new PersistenceWriter({
+            maxQueue: settings.writer.maxQueue,
+            maxRetries: settings.writer.maxRetries,
+            retryDelayMs: settings.writer.retryDelayMs,
             onStatusChange: (status) => Logger.error(`PersistenceLayer: storage status is now ${status}`)
         });
         this.registry = new SessionRegistry(path.join(this.baseDir, 'session-manifest.json'), this.writer);
@@ -117,7 +114,7 @@ export class PersistenceRepository {
             });
         }
 
-        this.heartbeatTimer = setInterval(() => { void this.registry.heartbeat(); }, HEARTBEAT_INTERVAL_MS);
+        this.heartbeatTimer = setInterval(() => { void this.registry.heartbeat(); }, this.heartbeatIntervalMs);
         this.heartbeatTimer.unref();
 
         return session;
@@ -270,11 +267,12 @@ export class PersistenceRepository {
         };
     }
 
-    async getSessionSummary(sessionNumber: number, windowHours = 24): Promise<SessionSummary | null> {
+    async getSessionSummary(sessionNumber: number): Promise<SessionSummary | null> {
         const session = await this.findSession(sessionNumber);
         if (!session) return null;
         const incidents = await this.sessionIncidents(session);
-        return buildSessionSummary(this.requireQueries(), session, windowHours, this.config.publisher.slowLatencyThresholdMs, incidents);
+        const dashboard = this.conf.dashboard === false ? DEFAULT_CONFIG.dashboard : this.conf.dashboard;
+        return buildSessionSummary(this.requireQueries(), session, dashboard.sessionSummaryWindowHours, this.conf.thresholds.slowLatencyMs, incidents);
     }
 
     private async sessionIncidents(session: SessionRecord): Promise<Incident[]> {
@@ -432,7 +430,7 @@ export class PersistenceRepository {
         };
 
         const incidents = await this.sessionIncidents(session);
-        const summary = await buildSessionSummary(queries, session, Number.POSITIVE_INFINITY, this.config.publisher.slowLatencyThresholdMs, incidents);
+        const summary = await buildSessionSummary(queries, session, Number.POSITIVE_INFINITY, this.conf.thresholds.slowLatencyMs, incidents);
         const issues: QueryIssue[] = [];
         const query = this.sessionQuery(session);
         const buckets = (async function* () {

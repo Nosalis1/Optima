@@ -13,9 +13,9 @@ import type { RuntimeStore } from "./runtime.store";
 export interface BucketStoreOptions {
     sessionId: string;
     instanceId: string;
-    intervalMs?: number;
-    historySize?: number;
-    maxEndpoints?: number;
+    intervalMs: number;
+    historySize: number;
+    maxEndpoints: number;
     originProvider?: () => Origin;
 }
 
@@ -44,9 +44,9 @@ export class BucketStore {
         private readonly runtime: RuntimeStore,
         private readonly options: BucketStoreOptions
     ) {
-        this.intervalMs = options.intervalMs ?? 1000;
-        this.maxEndpoints = options.maxEndpoints ?? 200;
-        this.history = new RingBuffer<MetricBucket>(options.historySize ?? 60);
+        this.intervalMs = options.intervalMs;
+        this.maxEndpoints = options.maxEndpoints;
+        this.history = new RingBuffer<MetricBucket>(options.historySize);
         this.open = this.openInterval(Date.now(), process.hrtime.bigint());
     }
 

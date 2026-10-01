@@ -12,13 +12,20 @@ export default function CorrelationPage() {
 
     const { correlation } = data;
 
+    const selectedResult = correlation.results.find((r) => r.id === selected) ?? correlation.results[0] ?? null;
+
     return (
-        <div className="p-6 space-y-2">
+        <div className="p-6 space-y-4">
             <Assessment assessment={correlation.assessment} />
 
-            <Results results={correlation.results} onSelect={setSelected} />
-
-            <Detailed result={correlation.results.find((r) => r.id === selected) || null} />
-        </div >
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+                <div className="lg:col-span-3">
+                    <Results results={correlation.results} selectedId={selectedResult?.id ?? null} onSelect={setSelected} />
+                </div>
+                <div className="lg:col-span-2">
+                    <Detailed result={selectedResult} />
+                </div>
+            </div>
+        </div>
     );
 }

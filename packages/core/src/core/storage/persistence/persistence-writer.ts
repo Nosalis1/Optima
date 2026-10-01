@@ -7,9 +7,9 @@ export type PersistenceCategory = 'http_requests' | 'events' | 'correlation' | '
 export type StorageStatus = 'OK' | 'DEGRADED';
 
 export interface WriterOptions {
-    maxQueue?: number; // max number of jobs in queue
-    maxRetries?: number; // max number of retries for a failed job
-    retryDelayMs?: number; // delay between retries in milliseconds
+    maxQueue: number; // max number of jobs in queue
+    maxRetries: number; // max number of retries for a failed job
+    retryDelayMs: number; // delay between retries in milliseconds
     onStatusChange?: (status: StorageStatus) => void;
 }
 export interface RecordInput<T> {
@@ -42,11 +42,11 @@ export class PersistenceWriter {
     private _completedJobs = 0;
     private _lastError: { description: string; message: string; at: string } | null = null;
 
-    constructor(options: WriterOptions = {}) {
-        this.maxQueue = options.maxQueue ?? 1000;
-        this.maxRetries = options.maxRetries ?? 3;
-        this.retryDelayMs = options.retryDelayMs ?? 100;
-        this.onStatusChange = options.onStatusChange;
+    constructor(opts: WriterOptions) {
+        this.maxQueue = opts.maxQueue;
+        this.maxRetries = opts.maxRetries;
+        this.retryDelayMs = opts.retryDelayMs;
+        this.onStatusChange = opts.onStatusChange;
     }
 
     get status(): StorageStatus { return this._status; }

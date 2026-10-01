@@ -2,7 +2,6 @@ import { Server as HTTPServer } from 'http';
 import { ExpressWebSocketAdapter } from './metrics-websocket.adapter';
 import { TrafficSimulator } from '../simulation/simulation';
 import { MetricsPublisher } from '../core/delivery';
-import { getConfig } from '../config';
 import Logger from '../core/telemetry/logger';
 import { IntervalManager, ApplicationEventManager } from '../core/organizers';
 import { shutdownOptimaRuntime, type OptimaRuntimeDependencies } from '../runtime';
@@ -18,15 +17,12 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
     if (started) return async () => { /* No-op */ };
     started = true;
 
-    const config = getConfig();
+    const config = dependencies.config;
 
     let simulator: TrafficSimulator | null = null;
     if (config.simulation) {
         simulator = new TrafficSimulator(dependencies.storage);
-        simulator.start({
-            intervalMs: config.simulation.intervalMs,
-            requestsPerTick: config.simulation.requestsPerTick,
-        });
+        simulator.start(config.simulation);
     }
 
     const websocket = new ExpressWebSocketAdapter(
@@ -34,7 +30,8 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
         dependencies.collector,
         dependencies.persistence,
         dependencies.correlation,
-        dependencies.incidents
+        dependencies.incidents,
+        config
     );
 
     websocket.init();

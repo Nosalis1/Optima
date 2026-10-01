@@ -165,15 +165,15 @@ export class TrafficSimulator {
         private readonly repository: LocalRepository
     ) { }
 
-    start(options?: { intervalMs?: number; requestsPerTick?: number; }) {
+    start(options: { intervalMs: number; requestsPerTick: number; }) {
         if (this.running) {
             return;
         }
 
         this.running = true;
 
-        const interval = options?.intervalMs ?? 100;
-        const baseRequests = options?.requestsPerTick ?? 20;
+        const interval = options.intervalMs;
+        const baseRequests = options.requestsPerTick;
 
         Logger.debug("Traffic simulation started!");
 
