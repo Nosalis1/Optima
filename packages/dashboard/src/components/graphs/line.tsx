@@ -3,7 +3,8 @@ import Grid, { type Padding, DEFAULT_PADDING } from "./utility/grid";
 import { getNiceScale } from "./utility/nice-scale";
 import { useSize } from "./utility/useSize";
 
-type Point = { x: number; y: number; }
+type Point = { x: number; y: number | null; }
+type ScaledPoint = { x: number; y: number; raw: { x: number; y: number } };
 
 type Entry = {
     points: Point[];
@@ -43,7 +44,7 @@ export default function LineGraph({
         return <div ref={ref} className="w-full h-full" />;
     }
 
-    const allYValues = data.flatMap((series) => series.points.map((p) => p.y));
+    const allYValues = data.flatMap((series) => series.points.flatMap((p) => p.y === null ? [] : [p.y]));
     if (allYValues.length === 0) {
         return <div ref={ref} className="w-full h-full" />;
     }
@@ -83,16 +84,25 @@ export default function LineGraph({
         return Number.isInteger(value) ? value.toString() : value.toFixed(1);
     });
 
-    function getScaledPoints(points: Point[]) {
-        return points.map((point) => {
+    function getScaledSegments(points: Point[]): ScaledPoint[][] {
+        const segments: ScaledPoint[][] = [];
+        let current: ScaledPoint[] = [];
+        for (const point of points) {
+            if (point.y === null) {
+                if (current.length) segments.push(current);
+                current = [];
+                continue;
+            }
             const normalizedX = (point.x - minX) / xRange;
             const x = padding.left + normalizedX * usableWidth;
 
-            const normalizedY = (point.y - minY) / yRange;
+            const normalizedY = (point.y - minY) / (yRange || 1);
             const y = chartHeight - padding.bottom - normalizedY * usableHeight;
 
-            return { x, y, raw: point };
-        });
+            current.push({ x, y, raw: { x: point.x, y: point.y } });
+        }
+        if (current.length) segments.push(current);
+        return segments;
     }
 
     return (
@@ -140,67 +150,71 @@ export default function LineGraph({
             </defs>
 
             {data.map((series, seriesIdx) => {
-                if (series.points.length === 0) return null;
+                const segments = getScaledSegments(series.points);
+                if (segments.length === 0) return null;
 
-                const points = getScaledPoints(series.points);
                 const strokeColor = series.color || defaultColor;
                 const lineStyle = series.type || defaultType;
                 const fillArea = series.fillArea ?? true;
 
-                const linePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
-
-                const firstX = points[0].x;
-                const lastX = points[points.length - 1].x;
-                const areaPathD = [
-                    `M ${firstX},${baselineY}`,
-                    ...points.map((p) => `L ${p.x},${p.y}`),
-                    `L ${lastX},${baselineY}`,
-                    "Z",
-                ].join(" ");
-
                 return (
                     <g key={`series-${seriesIdx}`}>
-                        {/* Area fill (gradient) */}
-                        {
-                            fillArea && points.length > 1 && (
-                                <path
-                                    d={areaPathD}
-                                    fill={`url(#area-gradient-${seriesIdx})`}
-                                    stroke="none"
-                                />
-                            )
-                        }
+                        {segments.map((points, segmentIdx) => {
+                            const firstX = points[0].x;
+                            const lastX = points[points.length - 1].x;
+                            const areaPathD = [
+                                `M ${firstX},${baselineY}`,
+                                ...points.map((p) => `L ${p.x},${p.y}`),
+                                `L ${lastX},${baselineY}`,
+                                "Z",
+                            ].join(" ");
 
-                        {/* Line path */}
-                        {
-                            points.length > 1 ? (
-                                <polyline
-                                    fill="none"
-                                    stroke={strokeColor}
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeDasharray={lineStyle === 'dashed' ? "6,6" : undefined}
-                                    points={linePoints}
-                                />
-                            ) : null
-                        }
+                            return (
+                                <g key={`segment-${seriesIdx}-${segmentIdx}`}>
+                                    {/* Area fill (gradient) */}
+                                    {
+                                        fillArea && points.length > 1 && (
+                                            <path
+                                                d={areaPathD}
+                                                fill={`url(#area-gradient-${seriesIdx})`}
+                                                stroke="none"
+                                            />
+                                        )
+                                    }
 
-                        {/* Data points */}
-                        {
-                            withDots && points.map((p, pointIdx) => (
-                                <circle
-                                    key={`point-${seriesIdx}-${pointIdx}`}
-                                    cx={p.x}
-                                    cy={p.y}
-                                    r="4"
-                                    className="fill-brand-900 stroke-2 pointer-events-auto cursor-pointer"
-                                    stroke={strokeColor}
-                                >
-                                    <title>{`X: ${p.raw.x}, Y: ${p.raw.y}`}</title>
-                                </circle>
-                            ))
-                        }
+                                    {/* Line path */}
+                                    {
+                                        points.length > 1 ? (
+                                            <polyline
+                                                fill="none"
+                                                stroke={strokeColor}
+                                                strokeWidth="2.5"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeDasharray={lineStyle === 'dashed' ? "6,6" : undefined}
+                                                points={points.map((p) => `${p.x},${p.y}`).join(" ")}
+                                            />
+                                        ) : null
+                                    }
+
+                                    {/* Data points */}
+                                    {
+                                        (withDots || points.length === 1) && points.map((p, pointIdx) => (
+                                            <circle
+                                                key={`point-${seriesIdx}-${segmentIdx}-${pointIdx}`}
+                                                cx={p.x}
+                                                cy={p.y}
+                                                r={withDots ? "4" : "2"}
+                                                className="fill-brand-900 stroke-2 pointer-events-auto cursor-pointer"
+                                                stroke={strokeColor}
+                                            >
+                                                <title>{`X: ${p.raw.x}, Y: ${p.raw.y}`}</title>
+                                            </circle>
+                                        ))
+                                    }
+                                </g>
+                            );
+                        })}
                     </g>
                 );
             })}

@@ -11,10 +11,6 @@ export enum WebSocketEvents {
     REQUEST_SYSTEM_DATA = "request-system-data",
     RESPONSE_SYSTEM_DATA = "response-system-data",
 
-    REQUEST_DASHBOARD_DATA = "request-dashboard-data",
-    RESPONSE_DASHBOARD_DATA = "response-dashboard-data",
-    RESPONSE_DASHBOARD_TICK_DATA = "response-dashboard-tick-data",
-
     REQUEST_ANALYTICS_DATA = "request-analytics-data",
     RESPONSE_ANALYTICS_DATA = "response-analytics-data",
     RESPONSE_FILTERED_ANALYTICS_DATA = "response-filtered-analytics-data",
@@ -24,4 +20,13 @@ export enum WebSocketEvents {
 
     REQUEST_CORRELATION_DATA = "request-correlation-data",
     RESPONSE_CORRELATION_DATA = "response-correlation-data",
+
+    REQUEST_CORRELATION_REPLAY = "request-correlation-replay",
+    RESPONSE_CORRELATION_REPLAY = "response-correlation-replay",
+
+    REQUEST_INCIDENTS = "request-incidents",
+    RESPONSE_INCIDENTS = "response-incidents",
+
+    REQUEST_DASHBOARD_BUCKETS = "request-dashboard-buckets",
+    RESPONSE_DASHBOARD_BUCKETS = "response-dashboard-buckets",
 }

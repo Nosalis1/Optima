@@ -12,71 +12,23 @@ export type RequestAggregate = {
 };
 
 export type RuntimeInterval = {
-    cpuUsage: {
-        numberOfCores: number;
-        process: {
-            userPercent: number;
-            systemPercent: number;
-            totalPercent: number;
-        };
-        system: {
-            idlePercent: number;
-            perCoreUsage: number[];
-        };
-    };
-    memoryUsage: {
-        heapUsage: number;
-        heapSize: number;
-        heapLimit: number;
-        rssMemory: number;
-        rssMemoryTotal: number;
-        externalMemory: number;
-        arrayBuffers: number;
-    };
-    loopDelay: {
-        minMs: number;
-        maxMs: number;
-        meanMs: number;
-        p50Ms: number;
-        p99Ms: number;
-    };
-    gc: {
-        gcCount: number;
-        gcTime: number;
-        gcPauseAverage: number;
-        minorGC: { runCount: number; averageTime: number; };
-        majorGC: { runCount: number; averageTime: number; };
-        incrementalGC: { runCount: number; averageTime: number; };
-        heapSpaces: { label: string; used: number; }[];
-        gcTotals: { totalPauseTime: number; freedMemory: number; promotions: number; tenuredSize: number; };
-    };
-    handles: {
-        activeHandles: number;
-        activeHandlesTimers: number;
-        activeHandlesSockets: number;
-        activeLibuvHandles: number;
-        timers: number;
-        fileDescriptors: number;
-    };
-    runtime: {
-        pid: number;
-        platform: NodeJS.Platform;
-        nodeVersion: string;
-        v8Version: string;
-        libuvVersion: string;
-        openSSLVersion: string;
-        threadPoolSize: number;
-        activeThreads: number;
-        startup: {
-            bootstrapTime: number;
-            requiredModules: number;
-        }
-    };
-}
+    cpuTimeUs: number | null;
+    cpuUserUs: number | null;
+    cpuSystemUs: number | null;
+    heapUsedBytes: number | null;
+    heapTotalBytes: number | null;
+    heapLimitBytes: number | null;
+    rssBytes: number | null;
+    eventLoopSampleCount: number;
+    eventLoopDelaySumMs: number | null;
+    eventLoopDelayMaxMs: number | null;
+    gcCount: number | null;
+    gcDurationSumMs: number | null;
+};
 
 export type EndpointAggregate = RequestAggregate & { method: string; route: string; }
 export type MetricBucket = {
-    schemaVersion: 2;
+    schemaVersion: typeof BUCKET_SCHEMA_VERSION;
     bucketId: string;
     sessionId: string;
     instanceId: string;
@@ -90,6 +42,8 @@ export type MetricBucket = {
     runtime: RuntimeInterval;
     qualityFlags: string[];
 }
+
+export const BUCKET_SCHEMA_VERSION = 3 as const;
 
 export const HISTOGRAM_SCHEMA_ID = 'lat-v1';
 export const HISTOGRAM_UPPER_BOUNDS_MS: readonly number[] = [
@@ -168,6 +122,15 @@ export function percentileFromAggregate(agg: RequestAggregate, q: number): numbe
     return agg.durationMaxMs ?? 0;
 }
 
+export function countSlowerThan(agg: RequestAggregate, thresholdMs: number): number {
+    let count = 0;
+    for (let i = 0; i < agg.histogramCounts.length; i++) {
+        const lower = i === 0 ? 0 : HISTOGRAM_UPPER_BOUNDS_MS[i - 1];
+        if (lower >= thresholdMs) count += agg.histogramCounts[i];
+    }
+    return count;
+}
+
 export function deriveMetrics(agg: RequestAggregate, durationMs: number) {
     const n = agg.requestCount;
     return {
@@ -182,6 +145,54 @@ export function deriveMetrics(agg: RequestAggregate, durationMs: number) {
         errorRate: n > 0 ? (agg.clientErrorCount + agg.serverErrorCount) / n : 0,
         clientErrorCount: agg.clientErrorCount,
         serverErrorCount: agg.serverErrorCount,
+    };
+}
+
+const sumN = (a: number | null, b: number | null) => a === null ? b : b === null ? a : a + b;
+
+export function emptyRuntime(): RuntimeInterval {
+    return {
+        cpuTimeUs: null, cpuUserUs: null, cpuSystemUs: null,
+        heapUsedBytes: null, heapTotalBytes: null, heapLimitBytes: null, rssBytes: null,
+        eventLoopSampleCount: 0, eventLoopDelaySumMs: null, eventLoopDelayMaxMs: null,
+        gcCount: null, gcDurationSumMs: null,
+    };
+}
+
+export function mergeRuntimeInto(t: RuntimeInterval, s: RuntimeInterval, sIsLater: boolean): void {
+    t.cpuTimeUs = sumN(t.cpuTimeUs, s.cpuTimeUs);
+    t.cpuUserUs = sumN(t.cpuUserUs, s.cpuUserUs);
+    t.cpuSystemUs = sumN(t.cpuSystemUs, s.cpuSystemUs);
+    t.eventLoopSampleCount += s.eventLoopSampleCount;
+    t.eventLoopDelaySumMs = sumN(t.eventLoopDelaySumMs, s.eventLoopDelaySumMs);
+    t.eventLoopDelayMaxMs = maxN(t.eventLoopDelayMaxMs, s.eventLoopDelayMaxMs);
+    t.gcCount = sumN(t.gcCount, s.gcCount);
+    t.gcDurationSumMs = sumN(t.gcDurationSumMs, s.gcDurationSumMs);
+    if (sIsLater) {
+        t.heapUsedBytes = s.heapUsedBytes;
+        t.heapTotalBytes = s.heapTotalBytes;
+        t.heapLimitBytes = s.heapLimitBytes;
+        t.rssBytes = s.rssBytes;
+    }
+}
+
+export function deriveRuntime(rt: RuntimeInterval, durationMs: number) {
+    const durationUs = durationMs * 1000;
+    const pct = (us: number | null) => us !== null && durationUs > 0 ? (us / durationUs) * 100 : null;
+    return {
+        cpuPercent: pct(rt.cpuTimeUs),
+        cpuUserPercent: pct(rt.cpuUserUs),
+        cpuSystemPercent: pct(rt.cpuSystemUs),
+        eventLoopDelayMeanMs: rt.eventLoopSampleCount > 0 && rt.eventLoopDelaySumMs !== null
+            ? rt.eventLoopDelaySumMs / rt.eventLoopSampleCount : null,
+        eventLoopDelayMaxMs: rt.eventLoopDelayMaxMs,
+        gcCount: rt.gcCount,
+        gcDurationSumMs: rt.gcDurationSumMs,
+        gcPauseAverageMs: rt.gcCount && rt.gcDurationSumMs !== null ? rt.gcDurationSumMs / rt.gcCount : null,
+        heapUsedBytes: rt.heapUsedBytes,
+        heapTotalBytes: rt.heapTotalBytes,
+        heapLimitBytes: rt.heapLimitBytes,
+        rssBytes: rt.rssBytes,
     };
 }
 

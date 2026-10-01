@@ -5,4 +5,5 @@ export interface TelemetryRequest {
     statusCode: number; // HTTP status code returned by the server
     responseTime: number; // Response time in milliseconds
     clientIp?: string; // IP address of the client making the request
+    origin?: 'real' | 'synthetic';
 }

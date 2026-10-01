@@ -5,11 +5,16 @@ import { MetricsPublisher } from '../core/delivery';
 import { getConfig } from '../config';
 import Logger from '../core/telemetry/logger';
 import { IntervalManager, ApplicationEventManager } from '../core/organizers';
-import type { OptimaRuntimeDependencies } from '../runtime';
+import { shutdownOptimaRuntime, type OptimaRuntimeDependencies } from '../runtime';
 
 let started = false;
 
-export function expressMetricsBootstrap(server: HTTPServer, dependencies: OptimaRuntimeDependencies): () => Promise<void> {
+export interface ExpressStopOptions {
+    closeServer?: boolean;
+    drainTimeoutMs?: number;
+}
+
+export function expressMetricsBootstrap(server: HTTPServer, dependencies: OptimaRuntimeDependencies): (options?: ExpressStopOptions) => Promise<void> {
     if (started) return async () => { /* No-op */ };
     started = true;
 
@@ -28,7 +33,8 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
         server,
         dependencies.collector,
         dependencies.persistence,
-        dependencies.correlation
+        dependencies.correlation,
+        dependencies.incidents
     );
 
     websocket.init();
@@ -43,12 +49,13 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
         dependencies.collector,
         dependencies.persistence,
         dependencies.correlation,
+        dependencies.incidents,
         websocket
     );
 
     const intervalManager = new IntervalManager({
-        tick: () => { dependencies.collector.tick(); dependencies.correlation.tick(); },
-        publisher: () => { publisher.publish(); dependencies.persistence.onPublisherTick(publisher.retrieveLastPublishedData() || null); },
+        tick: () => { dependencies.collector.tick(); dependencies.correlation.tick(); dependencies.incidents.tick(); },
+        publisher: () => { publisher.publish(); },
         persistence: () => { dependencies.persistence.archiveAllCategories(); }
     }, config);
 
@@ -60,20 +67,28 @@ export function expressMetricsBootstrap(server: HTTPServer, dependencies: Optima
         reason: 'Express metrics module initialized',
     });
 
-    const stop = async () => {
+    let stopping: Promise<void> | null = null;
+    const stop = (options: ExpressStopOptions = {}) => {
+        if (stopping) return stopping;
         Logger.debug('Metrics bootstrap shutdown initiated.');
 
-        await ApplicationEventManager.instance?.emit({
-            type: 'SHUTDOWN',
-            reason: 'Express metrics module shutting down',
-        });
-
-        intervalManager.stopIntervals();
-        eventManager.stop();
-        simulator?.stop();
-        websocket.disconnect();
-
-        started = false;
+        stopping = shutdownOptimaRuntime(dependencies, {
+            stopIntake: () => {
+                simulator?.stop();
+                if (options.closeServer && server.listening) server.close();
+            },
+            stopProducers: () => intervalManager.stopIntervals(),
+            emitShutdownEvent: async () => {
+                await ApplicationEventManager.instance?.emit({
+                    type: 'SHUTDOWN',
+                    reason: 'Express metrics module shutting down',
+                });
+                eventManager.stop();
+            },
+            closeTransport: () => websocket.disconnect(),
+            drainTimeoutMs: options.drainTimeoutMs,
+        }).finally(() => { started = false; });
+        return stopping;
     };
 
     return stop;

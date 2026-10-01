@@ -10,7 +10,7 @@ import { NestWebSocketAdapter } from './metrics-websocket.adapter';
 import { type ReadonlyConfig } from '../config';
 import Logger from '../core/telemetry/logger';
 import { ApplicationEventManager, IntervalManager } from '../core/organizers';
-import { type OptimaRuntimeDependencies } from '../runtime';
+import { shutdownOptimaRuntime, type OptimaRuntimeDependencies } from '../runtime';
 
 @Injectable()
 export class MetricsBootstrapService
@@ -60,12 +60,13 @@ export class MetricsBootstrapService
             this.dependencies.collector,
             this.dependencies.persistence,
             this.dependencies.correlation,
+            this.dependencies.incidents,
             this.websocket,
         );
 
         this.intervalManager = new IntervalManager({
-            tick: () => { this.dependencies!.collector.tick(); this.dependencies!.correlation.tick(); },
-            publisher: () => { this.publisher?.publish(); this.dependencies!.persistence.onPublisherTick(this.publisher?.retrieveLastPublishedData() || null); },
+            tick: () => { this.dependencies!.collector.tick(); this.dependencies!.correlation.tick(); this.dependencies!.incidents.tick(); },
+            publisher: () => { this.publisher?.publish(); },
             persistence: () => { this.dependencies!.persistence.archiveAllCategories(); }
         }, this.config);
 
@@ -82,22 +83,25 @@ export class MetricsBootstrapService
         if (!this.started) { return; }
         this.started = false;
 
-        await ApplicationEventManager.instance?.emit({
-            type: 'SHUTDOWN',
-            reason: 'Nest metrics module shutting down',
+        await shutdownOptimaRuntime(this.dependencies, {
+            stopIntake: () => {
+                this.simulator?.stop();
+                this.simulator = null;
+            },
+            stopProducers: () => {
+                this.intervalManager?.stopIntervals();
+                this.intervalManager = null;
+                this.publisher = null;
+            },
+            emitShutdownEvent: async () => {
+                await ApplicationEventManager.instance?.emit({
+                    type: 'SHUTDOWN',
+                    reason: 'Nest metrics module shutting down',
+                });
+                this.eventManager?.stop();
+                this.eventManager = null;
+            },
+            closeTransport: () => this.websocket.disconnect(),
         });
-
-        this.intervalManager?.stopIntervals();
-        this.intervalManager = null;
-
-        this.eventManager?.stop();
-        this.eventManager = null;
-
-        this.simulator?.stop();
-        this.simulator = null;
-
-        this.publisher = null;
-
-        this.websocket.disconnect();
     }
 }

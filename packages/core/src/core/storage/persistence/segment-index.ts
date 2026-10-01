@@ -6,7 +6,7 @@ import {
 } from '../utility/file-buffer';
 import { dedupeRecords, type PersistenceCategory } from './persistence-writer';
 import Logger from '../../telemetry/logger';
-import type { MetricBucket } from '../stores/bucket-metric';
+import { BUCKET_SCHEMA_VERSION, type MetricBucket } from '../stores/bucket-metric';
 
 export interface SegmentEntry {
     date: string;
@@ -171,7 +171,7 @@ export class SegmentIndex {
         const entries = new Map<string, SegmentEntry>();
         for await (const rec of dedupeRecords(readRecords<MetricBucket>(file))) {
             const b = rec.payload;
-            if (!b || b.schemaVersion !== 2 || typeof b.sessionId !== 'string') continue;
+            if (!b || b.schemaVersion !== BUCKET_SCHEMA_VERSION || typeof b.sessionId !== 'string') continue;
             touch(entries, date, b);
         }
         return entries;

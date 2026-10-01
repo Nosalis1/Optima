@@ -5,9 +5,8 @@ import DashboardTables from './tables';
 import { useMetrics } from "../../context/metrics.context";
 
 export default function DashboardPage() {
-    const { data } = useMetrics();
-
-    const { dashboard } = data;
+    const { dashboard, data } = useMetrics();
+    const { impactEndpoints, incidents } = data;
 
     return (
         <div className="p-6">
@@ -15,7 +14,7 @@ export default function DashboardPage() {
 
             <DashboardGraphs data={dashboard} />
 
-            <DashboardTables data={dashboard} />
+            <DashboardTables impactEndpoints={impactEndpoints} incidents={incidents} />
         </div>
     );
 }

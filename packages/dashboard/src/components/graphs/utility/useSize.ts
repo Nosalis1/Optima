@@ -2,15 +2,14 @@
 import React from 'react';
 
 export function useSize<T extends HTMLElement = HTMLDivElement>(defaultWidth: number = 40, defaultHeight: number = 80) {
-    const ref = React.useRef<T | null>(null);
+    const [element, setElement] = React.useState<T | null>(null);
+    const ref = React.useCallback((node: T | null) => setElement(node), []);
     const [dimensions, setDimensions] = React.useState({ width: defaultWidth, height: defaultHeight });
-    const [isHydrated, setIsHydrated] = React.useState(false);
 
     React.useEffect(() => {
-        const el = ref.current;
+        const el = element;
         if (!el) return;
 
-        let frame: number | undefined;
         let resizeObserver: ResizeObserver | undefined;
 
         const updateDimensions = () => {
@@ -25,7 +24,6 @@ export function useSize<T extends HTMLElement = HTMLDivElement>(defaultWidth: nu
             });
         }
 
-        setIsHydrated(true);
         window.addEventListener('resize', updateDimensions);
 
         if (typeof ResizeObserver !== 'undefined') {
@@ -33,20 +31,18 @@ export function useSize<T extends HTMLElement = HTMLDivElement>(defaultWidth: nu
             resizeObserver.observe(el);
         }
 
-        frame = window.requestAnimationFrame(updateDimensions);
+        const frame = window.requestAnimationFrame(updateDimensions);
 
         return () => {
             window.removeEventListener('resize', updateDimensions);
             resizeObserver?.disconnect();
-            if (frame) {
-                window.cancelAnimationFrame(frame);
-            }
+            window.cancelAnimationFrame(frame);
         };
-    }, []);
+    }, [element]);
 
     return {
         ...dimensions,
-        isHydrated,
+        isHydrated: element !== null,
         ref
     };
 }

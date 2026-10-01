@@ -1,6 +1,6 @@
 import { CallHandler, ExecutionContext, Injectable, Inject, NestInterceptor } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { tap, finalize } from 'rxjs/operators';
 import { NestAdapter } from './metrics.adapter';
 import Logger from '../core/telemetry/logger';
 import type { OptimaRuntimeDependencies } from '../runtime';
@@ -16,10 +16,14 @@ export class MetricsInterceptor implements NestInterceptor {
     intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
         if (context.getType() !== 'http') { return next.handle(); }
         const startHrTime = process.hrtime.bigint();
-        return next.handle().pipe(tap({
-            next: () => this.record(context, startHrTime),
-            error: () => this.record(context, startHrTime),
-        }));
+        const done = this.dependencies.telemetry.track();
+        return next.handle().pipe(
+            tap({
+                next: () => this.record(context, startHrTime),
+                error: () => this.record(context, startHrTime),
+            }),
+            finalize(done),
+        );
     }
 
     private record(context: ExecutionContext, startHrTime: bigint): void {

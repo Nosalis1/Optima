@@ -6,7 +6,8 @@ export type ApplicationEventType =
     | 'STARTUP'
     | 'SHUTDOWN'
     | 'CRASH'
-    | 'ANOMALY';
+    | 'INCIDENT_OPENED'
+    | 'INCIDENT_RESOLVED';
 
 /**
  * Represents an event that occurs in the application.
@@ -16,4 +17,5 @@ export interface ApplicationEvent {
     type: ApplicationEventType;
     applicationVersion: string;
     reason: string;
+    details?: Record<string, unknown>;
 }

@@ -1,9 +1,11 @@
 import {
     deriveMetrics,
+    countSlowerThan,
     mergeInto,
     createAggregate,
     type MetricBucket,
     type RequestAggregate,
+    type EndpointAggregate,
 } from './bucket-metric';
 
 export interface BucketView {
@@ -68,13 +70,19 @@ export interface EndpointView {
     p95: number;
     p99: number;
     errorRate: number;
+    impactedRequests: number;
     status: 'HEALTHY' | 'DEGRADED';
 }
 
-export function deriveEndpointView(buckets: readonly MetricBucket[]): EndpointView[] {
+export interface EndpointSeriesInput {
+    durationMs: number;
+    endpoints?: readonly EndpointAggregate[];
+}
+
+export function deriveEndpointView(buckets: readonly EndpointSeriesInput[], slowLatencyMs: number): EndpointView[] {
     const merged = new Map<string, { method: string; route: string; agg: RequestAggregate }>();
     for (const b of buckets) {
-        for (const e of b.endpoints) {
+        for (const e of b.endpoints ?? []) {
             const key = `${e.method}:${e.route}`;
             let m = merged.get(key);
             if (!m) { m = { method: e.method, route: e.route, agg: createAggregate() }; merged.set(key, m); }
@@ -84,7 +92,7 @@ export function deriveEndpointView(buckets: readonly MetricBucket[]): EndpointVi
     const last = buckets[buckets.length - 1];
     return [...merged.entries()].map(([key, m]) => {
         const all = deriveMetrics(m.agg, 1000);
-        const cur = last?.endpoints.find(e => `${e.method}:${e.route}` === key);
+        const cur = last?.endpoints?.find(e => `${e.method}:${e.route}` === key);
         return {
             method: m.method, route: m.route,
             rps: cur && last ? deriveMetrics(cur, last.durationMs).rps : 0,
@@ -95,6 +103,7 @@ export function deriveEndpointView(buckets: readonly MetricBucket[]): EndpointVi
             p95: all.p95,
             p99: all.p99,
             errorRate: all.errorRate,
+            impactedRequests: all.serverErrorCount + countSlowerThan(m.agg, slowLatencyMs),
             status: all.clientErrorCount + all.serverErrorCount > 0 ? 'DEGRADED' : 'HEALTHY',
         };
     });

@@ -9,14 +9,9 @@ import {
     archiveFile
 } from "./utility";
 import type {
-    AnalyticsData,
     ApplicationEvent,
-    DashboardData,
-    HealthData,
-    SystemStaticInfo,
+    Incident,
     SessionSummary,
-    HourlyBucket,
-    CorrelationData,
     SessionRecord,
     SessionManifest
 } from "../domain";
@@ -30,9 +25,10 @@ import {
 import { SessionRegistry } from './persistence/session-registry';
 import { ApplicationEventManager } from "../organizers";
 import Logger from "../telemetry/logger";
-import type { MetricBucket } from "./stores/bucket-metric";
+import { BUCKET_SCHEMA_VERSION, type MetricBucket } from "./stores/bucket-metric";
 import { SegmentIndex } from "./persistence/segment-index";
-import type { CommittedBucketSource, QueryIssue, TelemetryQueryService } from "../telemetry/telemetry-query.service";
+import { buildSessionSummary } from "./persistence/session-summary";
+import type { CommittedBucketSource, MetricsQuery, QueryIssue, TelemetryQueryService } from "../telemetry/telemetry-query.service";
 import type { CorrelationFinding } from "../telemetry/utility/correlation-finding";
 
 type HttpMetricRecord = {
@@ -43,32 +39,7 @@ type HttpMetricRecord = {
     timestamp: string;
 };
 
-type HealthSnapshotRecord = {
-    systemStaticInfo: SystemStaticInfo;
-    dashboardData: DashboardData;
-    analyticsData: AnalyticsData;
-    healthData: HealthData;
-    correlationData: CorrelationData;
-};
-
-interface HourBucketAccumulator {
-    clientErrorCount: number;
-    serverErrorCount: number;
-    rpsSum: number;
-    rpsMax: number;
-    latencySum: number;
-    latencyMax: number;
-    healthyEndpointCount: number;
-    slowEndpointCount: number;
-    sampleCount: number;
-};
-
 const HEARTBEAT_INTERVAL_MS = 30_000;
-
-const hourKeyFor = (date: Date | string): string => {
-    if (typeof date === 'string') date = new Date(date);
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours())).toISOString();
-}
 
 export class PersistenceRepository {
     private httpBuffer: RecordInput<HttpMetricRecord>[] = [];
@@ -83,6 +54,8 @@ export class PersistenceRepository {
     private heartbeatTimer: NodeJS.Timeout | null = null;
 
     private shutdownPromise: Promise<void> | null = null;
+    private closing = false;
+    private readonly inFlight = new Set<Promise<unknown>>();
 
     readonly sessionId = randomUUID();
 
@@ -117,6 +90,7 @@ export class PersistenceRepository {
     }
 
     attachQueryService(q: TelemetryQueryService): void { this.queries = q; }
+    get isEnabled(): boolean { return this.enabled; }
     get bucketSource(): CommittedBucketSource {
         return { read: (s, f, t, onIssue) => this.readBuckets(s, f, t, onIssue) };
     }
@@ -153,6 +127,18 @@ export class PersistenceRepository {
 
     //#region Writing Metrics
 
+    private track<T>(op: Promise<T>): Promise<T> {
+        this.inFlight.add(op);
+        void op.finally(() => this.inFlight.delete(op)).catch(() => { });
+        return op;
+    }
+
+    private async drainInFlight(): Promise<void> {
+        while (this.inFlight.size > 0) {
+            await Promise.allSettled([...this.inFlight]);
+        }
+    }
+
     private async enqueue<T>(category: PersistenceCategory, items: RecordInput<T>[]): Promise<void> {
         try {
             await this.writer.enqueueAppend(this.baseDir, category, items);
@@ -163,7 +149,7 @@ export class PersistenceRepository {
     }
 
     onHttpRequest(metric: HttpMetricRecord): void {
-        if (!this.enabled || !this.persistRawRequests) return;
+        if (!this.enabled || !this.persistRawRequests || this.closing) return;
         if (metric.statusCode < 400) return; // Only persisting errors for now
 
         this.httpBuffer.push({ recordId: randomUUID(), payload: metric });
@@ -177,69 +163,55 @@ export class PersistenceRepository {
         if (!this.enabled || this.httpBuffer.length === 0) return;
         const batch = this.httpBuffer;
         this.httpBuffer = [];
-        await this.enqueue('http_requests', batch);
+        await this.track(this.enqueue('http_requests', batch));
     }
 
-    async onBucketClosed(bucket: MetricBucket): Promise<boolean> {
-        if (!this.enabled) return false;
-        const session = await this.ready;
-        if (!session) return false;
-        try {
-            await this.writer.enqueueAppend(this.baseDir, 'metric_buckets', [{ recordId: bucket.bucketId, payload: bucket }], { date: new Date(bucket.endTime) });
-            this.segments.noteWritten(bucket);
-            this.registry.notePersisted(bucket.sequence);
-            return true;
-        } catch {
-            return false;
-        }
+    onBucketClosed(bucket: MetricBucket): Promise<boolean> {
+        if (!this.enabled) return Promise.resolve(false);
+        return this.track((async () => {
+            const session = await this.ready;
+            if (!session) return false;
+            try {
+                await this.writer.enqueueAppend(this.baseDir, 'metric_buckets', [{ recordId: bucket.bucketId, payload: bucket }], { date: new Date(bucket.endTime) });
+                this.segments.noteWritten(bucket);
+                this.registry.notePersisted(bucket.sequence);
+                return true;
+            } catch {
+                return false;
+            }
+        })());
     }
 
-    async saveCorrelationFinding(finding: CorrelationFinding): Promise<boolean> {
-        if (!this.enabled) return false;
-        const session = await this.ready;
-        if (!session) return false;
-        try {
-            await this.writer.enqueueAppend(this.baseDir, 'correlation',
-                [{ recordId: finding.findingId, payload: finding }]);
-            this.registry.notePersisted();
-            return true;
-        } catch { return false; }
+    saveCorrelationFinding(finding: CorrelationFinding): Promise<boolean> {
+        if (!this.enabled) return Promise.resolve(false);
+        return this.track((async () => {
+            const session = await this.ready;
+            if (!session) return false;
+            try {
+                await this.writer.enqueueAppend(this.baseDir, 'correlation',
+                    [{ recordId: finding.findingId, payload: finding }]);
+                this.registry.notePersisted();
+                return true;
+            } catch { return false; }
+        })());
     }
 
-    //! Deprecated, as we will persist the whole bucket instead of analized data
-    // TODO: Change in next step
-    async onPublisherTick(snapshot: HealthSnapshotRecord | null): Promise<void> {
-        if (!this.enabled || snapshot === null) return;
-        const session = await this.ready;
-        if (!session) return;
-
-        const { systemStaticInfo, dashboardData, analyticsData, healthData, correlationData } = snapshot;
-        const { history: dashboardHistory, charts, ...safeDashboardData } = dashboardData;
-        const { latencyDistribution, requestVolume, endpointsTable, history: analyticsHistory, ...safeAnalyticsData } = analyticsData;
-        const data = { systemStaticInfo, dashboardData: safeDashboardData, analyticsData: safeAnalyticsData, healthData };
-
-        const tick = new Date().toISOString();
-        await Promise.all([
-            this.enqueue('system_health', [{ recordId: `${session.sessionId}:health:${tick}`, payload: data }]),
-            this.enqueue('correlation', [{ recordId: `${session.sessionId}:correlation:${tick}`, payload: correlationData }]),
-            this.flushHttpBuffer(),
-        ]);
+    onApplicationEvent(event: ApplicationEvent): Promise<void> {
+        if (!this.enabled) return Promise.resolve();
+        const record = { recordId: randomUUID(), payload: { ...event } };
+        return this.track((async () => {
+            const session = await this.ready;
+            if (!session) return;
+            await this.enqueue('events', [record]);
+        })());
     }
 
-    async onApplicationEvent(event: ApplicationEvent): Promise<void> {
-        if (!this.enabled) return;
-        const session = await this.ready;
-        if (!session) return;
-
-        const eventId = randomUUID();
-        await this.enqueue('events', [{ recordId: eventId, payload: event }]);
-    }
-
-    getStorageStatus(): { status: StorageStatus; lostRecords: number; pending: number } {
+    getStorageStatus(): { status: StorageStatus; lostRecords: number; pending: number; lastError: PersistenceWriter['lastError'] } {
         return {
             status: this.writer.status,
             lostRecords: this.writer.lostRecords,
-            pending: this.writer.pending
+            pending: this.writer.pending + this.inFlight.size,
+            lastError: this.writer.lastError
         };
     }
 
@@ -261,7 +233,7 @@ export class PersistenceRepository {
                 startedAt: new Date().toISOString(),
                 endedAt: null,
                 lastPersistedAt: null,
-                lastCommitedSequence: 0,
+                lastCommittedSequence: 0,
                 status: 'RUNNING'
             };
         }
@@ -283,115 +255,57 @@ export class PersistenceRepository {
         return null;
     }
 
-    //! Deprecated, we now use difference method
+    private requireQueries(): TelemetryQueryService {
+        if (!this.queries) throw new Error('PersistenceRepository: query service not attached');
+        return this.queries;
+    }
+
+    sessionQuery(session: SessionRecord): MetricsQuery {
+        const window = SessionRegistry.window(session);
+        return {
+            sessionId: session.sessionId,
+            from: window.start.toISOString(),
+            to: window.end.toISOString(),
+            consistency: session.status === 'RUNNING' ? 'live' : 'committed',
+        };
+    }
+
     async getSessionSummary(sessionNumber: number, windowHours = 24): Promise<SessionSummary | null> {
         const session = await this.findSession(sessionNumber);
         if (!session) return null;
+        const incidents = await this.sessionIncidents(session);
+        return buildSessionSummary(this.requireQueries(), session, windowHours, this.config.publisher.slowLatencyThresholdMs, incidents);
+    }
 
-        const window = SessionRegistry.window(session);
-        const windowStartCandidate = new Date(window.end.getTime() - windowHours * 60 * 60 * 1000);
-        window.start = windowStartCandidate > window.start ? windowStartCandidate : window.start;
-
-        const dates = SessionRegistry.enumerateDates(window);
-
-        const hourly = new Map<string, HourBucketAccumulator>();
-        for (const hourKey of SessionRegistry.enumerateHours(window)) {
-            hourly.set(hourKey, {
-                clientErrorCount: 0, serverErrorCount: 0,
-                rpsSum: 0, rpsMax: 0,
-                latencySum: 0, latencyMax: 0,
-                healthyEndpointCount: 0, slowEndpointCount: 0,
-                sampleCount: 0
-            });
+    private async sessionIncidents(session: SessionRecord): Promise<Incident[]> {
+        if (!this.enabled) return [];
+        const byId = new Map<string, Incident>();
+        const events = this.sessionRecords<ApplicationEvent>('events', session, e =>
+            (e.type === 'INCIDENT_OPENED' || e.type === 'INCIDENT_RESOLVED')
+            && (e.details as Partial<Incident> | undefined)?.sessionId === session.sessionId);
+        for await (const event of events) {
+            const incident = event.details as unknown as Incident;
+            const prev = byId.get(incident.incidentId);
+            if (!prev || prev.status !== 'RESOLVED') byId.set(incident.incidentId, incident);
         }
+        return [...byId.values()].sort((a, b) => b.firedAt.localeCompare(a.firedAt));
+    }
 
-        let clientErrorCount = 0, serverErrorCount = 0;
-        let rpsSum = 0, rpsMax = 0;
-        let latencySum = 0, latencyMax = 0;
-        let sampleCount = 0;
+    async findCorrelationFinding(findingId: string): Promise<CorrelationFinding | null> {
+        if (!this.enabled) return null;
+        await this.ready;
+        const sessionId = findingId.split(':')[0];
+        const session = this.registry.all.find(s => s.sessionId === sessionId);
+        if (!session) return null;
 
-        for (const date of dates) {
-            const httpPath = await this.resolveExistingFile('http_requests', date);
-            if (httpPath) {
-                for await (const record of dedupeRecords(readRecords<HttpMetricRecord>(httpPath))) {
-                    const ts = new Date(record.payload.timestamp);
-                    if (ts < window.start || ts > window.end) continue;
-
-                    const bucket = hourly.get(hourKeyFor(ts));
-                    const isServerError = record.payload.statusCode >= 500;
-                    const isClientError = record.payload.statusCode >= 400 && record.payload.statusCode < 500;
-
-                    if (isServerError) {
-                        serverErrorCount++;
-                        if (bucket) bucket.serverErrorCount++;
-                    } else if (isClientError) {
-                        clientErrorCount++;
-                        if (bucket) bucket.clientErrorCount++;
-                    }
-                }
-            }
-
-            const healthPath = await this.resolveExistingFile('system_health', date);
-            if (healthPath) {
-                for await (const record of dedupeRecords(readRecords<HealthSnapshotRecord>(healthPath))) {
-                    const ts = new Date(record.createdAt);
-                    if (ts < window.start || ts > window.end) continue;
-
-                    const rps = record.payload.dashboardData.current.rps;
-                    const latency = record.payload.dashboardData.current.latency;
-
-                    rpsSum += rps;
-                    rpsMax = Math.max(rpsMax, rps);
-
-                    latencySum += latency;
-                    latencyMax = Math.max(latencyMax, latency);
-
-                    sampleCount++;
-
-                    const bucket = hourly.get(hourKeyFor(ts));
-                    if (bucket) {
-                        bucket.rpsSum += rps;
-                        bucket.rpsMax = Math.max(bucket.rpsMax, rps);
-                        bucket.latencySum += latency;
-                        bucket.latencyMax = Math.max(bucket.latencyMax, latency);
-                        bucket.healthyEndpointCount += record.payload.analyticsData.summary.healthyEndpoints;
-                        bucket.slowEndpointCount += record.payload.analyticsData.summary.slowEndpoints;
-                        bucket.sampleCount++;
-                    }
-                }
+        for (const date of SessionRegistry.enumerateDates(SessionRegistry.window(session))) {
+            const file = await this.resolveExistingFile('correlation', date);
+            if (!file) continue;
+            for await (const rec of dedupeRecords(readRecords<CorrelationFinding>(file))) {
+                if (rec.id === findingId) return rec.payload;
             }
         }
-
-        const perHour: HourlyBucket[] = Array.from(hourly.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([hourStart, acc]) => ({
-                hourStart,
-                clientErrorCount: acc.clientErrorCount,
-                serverErrorCount: acc.serverErrorCount,
-                avgRps: acc.sampleCount > 0 ? acc.rpsSum / acc.sampleCount : 0,
-                maxRps: acc.rpsMax,
-                avgLatency: acc.sampleCount > 0 ? acc.latencySum / acc.sampleCount : 0,
-                maxLatency: acc.latencyMax,
-                healthyEndpointCount: acc.sampleCount > 0 ? acc.healthyEndpointCount / acc.sampleCount : 0,
-                slowEndpointCount: acc.sampleCount > 0 ? acc.slowEndpointCount / acc.sampleCount : 0,
-                sampleCount: acc.sampleCount
-            }));
-
-        return {
-            sessionNumber: session.sessionNumber,
-            startedAt: session.startedAt,
-            endedAt: session.endedAt,
-            windowStart: window.start.toISOString(),
-            windowEnd: window.end.toISOString(),
-            clientErrorCount,
-            serverErrorCount,
-            avgRps: sampleCount > 0 ? rpsSum / sampleCount : 0,
-            maxRps: rpsMax,
-            avgLatency: sampleCount > 0 ? latencySum / sampleCount : 0,
-            maxLatency: latencyMax,
-            sampleCount,
-            perHour
-        };
+        return null;
     }
 
     async *readBuckets(sessionId: string, fromMs: number, toMs: number, onIssue: (i: QueryIssue) => void): AsyncGenerator<MetricBucket> {
@@ -401,7 +315,7 @@ export class PersistenceRepository {
             const records = dedupeRecords(readRecords<MetricBucket>(file), id => onIssue({ type: 'CONFLICT', bucketId: id }));
             for await (const rec of records) {
                 const b = rec.payload;
-                if (b?.schemaVersion !== 2 || b.sessionId !== sessionId) continue;
+                if (b?.schemaVersion !== BUCKET_SCHEMA_VERSION || b.sessionId !== sessionId) continue;
                 if (Date.parse(b.startTime) > toMs || Date.parse(b.endTime) < fromMs) continue;
                 yield b;
             }
@@ -418,14 +332,16 @@ export class PersistenceRepository {
 
         this.shutdownPromise = (async () => {
             Logger.debug('PersistenceLayer: Shutdown initiated.');
+            this.closing = true;
             if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
 
             try {
                 await this.ready;
                 await this.flushHttpBuffer();
+                await this.drainInFlight();
                 await this.writer.whenIdle();
-                await this.registry.complete();
                 await this.segments.persistClosed();
+                await this.registry.complete();
                 await this.writer.close();
 
                 const removed = await cleanupOrphanedTempFiles(this.baseDir);
@@ -462,7 +378,7 @@ export class PersistenceRepository {
     }
 
     archiveAllCategories(): void {
-        const categories: PersistenceCategory[] = ['http_requests', 'system_health', 'events', 'correlation', 'metric_buckets'];
+        const categories: PersistenceCategory[] = ['http_requests', 'events', 'correlation', 'metric_buckets'];
         for (const category of categories) {
             this.archiveOldCategory(category).catch(err => {
                 Logger.error(`Error archiving old ${category} files`, err);
@@ -475,66 +391,70 @@ export class PersistenceRepository {
 
     //#region Session Export
 
-    private async streamWriteCategoryRecords(
-        out: NodeJS.WritableStream,
-        category: PersistenceCategory,
-        dates: string[],
-        window: { start: Date; end: Date }
-    ): Promise<void> {
-        let isFirst = true;
-        const { start: windowStart, end: windowEnd } = window;
-
-        for (const date of dates) {
-            const filePath = await this.resolveExistingFile(category, date);
-            if (!filePath) continue;
-
-            for await (const record of readRecords(filePath)) {
-                const ts = new Date(record.createdAt);
-                if (ts < windowStart || ts > windowEnd) continue;
-
-                if (!isFirst) out.write(',');
-                isFirst = false;
-
-                const canContinue = out.write(JSON.stringify(record));
-                if (!canContinue) {
-                    await new Promise<void>((resolve) => out.once('drain', resolve));
-                }
-            }
-        }
+    private async writeChunk(out: NodeJS.WritableStream, chunk: string): Promise<void> {
+        if (!out.write(chunk)) await new Promise<void>(resolve => out.once('drain', resolve));
     }
 
-    private async streamWriteCategory(
-        out: NodeJS.WritableStream,
+    private async streamJsonArray<T>(out: NodeJS.WritableStream, name: string, items: AsyncIterable<T>, last = false): Promise<void> {
+        await this.writeChunk(out, `${JSON.stringify(name)}:[`);
+        let first = true;
+        for await (const item of items) {
+            await this.writeChunk(out, (first ? '' : ',') + JSON.stringify(item));
+            first = false;
+        }
+        await this.writeChunk(out, last ? ']' : '],');
+    }
+
+    private async *sessionRecords<T>(
         category: PersistenceCategory,
-        dates: string[],
-        window: { start: Date; end: Date },
-        isLast: boolean = false
-    ): Promise<void> {
-        out.write(`"${category}":[`);
-        await this.streamWriteCategoryRecords(out, category, dates, window);
-        out.write(isLast ? ']' : '],');
+        session: SessionRecord,
+        belongs: (payload: T) => boolean
+    ): AsyncGenerator<T> {
+        const window = SessionRegistry.window(session);
+        for (const date of SessionRegistry.enumerateDates(window)) {
+            const file = await this.resolveExistingFile(category, date);
+            if (!file) continue;
+            for await (const rec of dedupeRecords(readRecords<T>(file))) {
+                if (belongs(rec.payload)) yield rec.payload;
+            }
+        }
     }
 
     async streamSessionExport(out: NodeJS.WritableStream, sessionNumber: number): Promise<boolean> {
         const session = await this.findSession(sessionNumber);
         if (!session) return false;
 
+        const queries = this.requireQueries();
         const window = SessionRegistry.window(session);
-        const dates = SessionRegistry.enumerateDates(window);
+        const inWindow = (iso: string | undefined) => {
+            const t = iso ? Date.parse(iso) : NaN;
+            return t >= window.start.getTime() && t <= window.end.getTime();
+        };
 
-        out.write('{');
-        out.write(`"sessionId":${JSON.stringify(session.sessionId)},`);
-        out.write(`"sessionNumber":${JSON.stringify(session.sessionNumber)},`);
-        out.write(`"status":${JSON.stringify(session.status)},`);
-        out.write(`"startedAt":${JSON.stringify(session.startedAt)},`);
-        out.write(`"endedAt":${JSON.stringify(session.endedAt)},`);
+        const incidents = await this.sessionIncidents(session);
+        const summary = await buildSessionSummary(queries, session, Number.POSITIVE_INFINITY, this.config.publisher.slowLatencyThresholdMs, incidents);
+        const issues: QueryIssue[] = [];
+        const query = this.sessionQuery(session);
+        const buckets = (async function* () {
+            for await (const e of queries.buckets(query, i => issues.push(i))) yield e.bucket;
+        })();
 
-        await this.streamWriteCategory(out, 'http_requests', dates, window);
-        await this.streamWriteCategory(out, 'system_health', dates, window);
-        await this.streamWriteCategory(out, 'events', dates, window);
-        await this.streamWriteCategory(out, 'correlation', dates, window, true);
+        await this.writeChunk(out, '{');
+        await this.writeChunk(out, `"sessionId":${JSON.stringify(session.sessionId)},`);
+        await this.writeChunk(out, `"sessionNumber":${JSON.stringify(session.sessionNumber)},`);
+        await this.writeChunk(out, `"status":${JSON.stringify(session.status)},`);
+        await this.writeChunk(out, `"startedAt":${JSON.stringify(session.startedAt)},`);
+        await this.writeChunk(out, `"endedAt":${JSON.stringify(session.endedAt)},`);
+        await this.writeChunk(out, `"lastCommittedSequence":${JSON.stringify(session.lastCommittedSequence)},`);
+        await this.writeChunk(out, `"summary":${JSON.stringify(summary)},`);
 
-        out.write('}');
+        await this.streamJsonArray(out, 'metric_buckets', buckets);
+        await this.writeChunk(out, `"bucketIssues":${JSON.stringify(issues)},`);
+        await this.streamJsonArray(out, 'events', this.sessionRecords<ApplicationEvent>('events', session, e => inWindow(e.timestamp)));
+        await this.streamJsonArray(out, 'http_requests', this.sessionRecords<HttpMetricRecord>('http_requests', session, r => inWindow(r.timestamp)));
+        await this.streamJsonArray(out, 'correlation', this.sessionRecords<CorrelationFinding>('correlation', session, f => f.sessionId === session.sessionId), true);
+
+        await this.writeChunk(out, '}');
         return true;
     }
 

@@ -1,14 +1,16 @@
 import type { ReadonlyConfig } from "../../config";
 import type { AnalyticsData, AnalyticsFilterSettings, EndpointLatencyDistribution, EndpointTelemetry, EndpointVolume } from "../domain";
-import type { LocalRepository } from "../storage";
+import type { TelemetryQueryService } from "./telemetry-query.service";
 import { deriveEndpointView, type EndpointView } from "../storage/stores/bucket-view";
 import { paginate } from "../utility";
+
+const IMPACT_TOP = 5;
 
 export class AnalyticsService {
     readonly slowLatencyThreshold: number;
 
     constructor(
-        private readonly storage: LocalRepository,
+        private readonly queries: TelemetryQueryService,
         private readonly config: ReadonlyConfig
     ) {
         this.slowLatencyThreshold = config.publisher.slowLatencyThresholdMs;
@@ -33,13 +35,14 @@ export class AnalyticsService {
             p95: derived.p95,
             p99: derived.p99,
             errorRate: derived.errorRate,
+            impactedRequests: derived.impactedRequests,
             status: derived.status,
         };
     }
 
     get(page = 1, pageSize = 20, filters: AnalyticsFilterSettings | undefined = undefined): AnalyticsData {
-        const history = this.storage.bucket.getHistory();
-        const endpointViews = deriveEndpointView(history);
+        const recent = this.queries.recent(this.config.ringBufferSize, { consistency: 'live', includeEndpoints: true });
+        const endpointViews = deriveEndpointView(recent.points, this.slowLatencyThreshold);
 
         const endpointList = endpointViews.filter(e => this.matchesFilters(e, filters))
             .sort((a, b) => a.method.localeCompare(b.method));
@@ -55,8 +58,17 @@ export class AnalyticsService {
                 data: pagination.data,
                 pagination: pagination.meta,
             },
+            impactEndpoints: this.impactEndpoints(endpointViews),
             history: [] // TODO: Remove in future, as history is not currently being used in the analytics dashboard
         };
+    }
+
+    private impactEndpoints(endpoints: EndpointView[]): EndpointTelemetry[] {
+        return endpoints
+            .filter(e => e.impactedRequests > 0)
+            .sort((a, b) => b.impactedRequests - a.impactedRequests || b.requestCount - a.requestCount)
+            .slice(0, IMPACT_TOP)
+            .map(e => this.toTelemetry(e));
     }
 
     private calculateSummary(endpoints: EndpointView[]): AnalyticsData['summary'] {

@@ -2,6 +2,9 @@ import type { TelemetryRequest } from '../domain';
 import type { ReadonlyConfig } from '../../config';
 
 export class TelemetryService {
+    private inFlight = 0;
+    private drainWaiters: Array<() => void> = [];
+
     constructor(
         private readonly storage: {
             record(request: TelemetryRequest): void;
@@ -19,6 +22,36 @@ export class TelemetryService {
         return allPatterns.some(pattern => {
             const cleanPattern = pattern.replace(/\*/g, '');
             return cleanPath.includes(cleanPattern);
+        });
+    }
+
+    track(): () => void {
+        this.inFlight++;
+        let done = false;
+        return () => {
+            if (done) return;
+            done = true;
+            this.inFlight--;
+            if (this.inFlight === 0) {
+                const waiters = this.drainWaiters;
+                this.drainWaiters = [];
+                for (const w of waiters) w();
+            }
+        };
+    }
+
+    get inFlightCount(): number { return this.inFlight; }
+
+    whenDrained(timeoutMs: number): Promise<boolean> {
+        if (this.inFlight === 0) return Promise.resolve(true);
+        return new Promise<boolean>(resolve => {
+            const timer = setTimeout(() => {
+                this.drainWaiters = this.drainWaiters.filter(w => w !== onDrain);
+                resolve(false);
+            }, timeoutMs);
+            timer.unref();
+            const onDrain = () => { clearTimeout(timer); resolve(true); };
+            this.drainWaiters.push(onDrain);
         });
     }
 

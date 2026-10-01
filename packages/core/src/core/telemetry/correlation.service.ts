@@ -1,14 +1,16 @@
-import type { LocalRepository } from '../storage/local.repository';
 import { calculateSampleSizeCorrelation } from '../utility/statistics';
 import {
     SystemAssessment,
     CorrelationPairResult,
-    type CorrelationData
+    type CorrelationData,
+    type RelatedFinding
 } from '../domain';
 import Logger from './logger';
-import type { TelemetryQueryService } from './telemetry-query.service';
+import type { TelemetryQueryService, SeriesPoint } from './telemetry-query.service';
+import { verifyFinding, type ReplayOutcome } from './utility/correlation-replay';
 import {
     CORRELATION_METHOD_VERSION,
+    DEFAULT_CORRELATION_WINDOW,
     INPUT_SCHEMA_VERSION,
     evaluationKey,
     findingIdFor,
@@ -27,13 +29,15 @@ import {
     type PairConfig
 } from './utility/correlation-input';
 
-export interface FindingSink {
+export interface FindingStore {
     save(finding: CorrelationFinding): Promise<boolean>;
+    find(findingId: string): Promise<CorrelationFinding | null>;
+    readonly durable: boolean;
 }
 
 export interface CorrelationDeps {
     queries: TelemetryQueryService;
-    finding: FindingSink;
+    finding: FindingStore;
     identity: { sessionId: () => string; instanceId: string; };
 }
 
@@ -46,11 +50,9 @@ interface CorrelationServiceOptions {
     maxWindow?: number;
     minCoverage?: number;
     analysisIntervalMs?: number;
-    alertCooldownMs?: number;
     transform?: CorrelationTransform;
     scopes?: CorrelationScope[];
     evaluateEveryIntervals?: number;
-    persistEveryIntervals?: number;
 }
 
 type UiResult = CorrelationPairResult & { findingId: string };
@@ -59,21 +61,16 @@ export class CorrelationService {
     readonly requiredSampleSize: number;
     readonly parameters: CorrelationParameters;
 
-    private readonly storage: LocalRepository;
     private readonly deps: CorrelationDeps;
     private readonly transform: CorrelationTransform;
     private readonly scopes: CorrelationScope[];
     private readonly analysisIntervalMs: number;
-    private readonly alertCooldownMs: number;
     private readonly evaluateEvery: number;
-    private readonly persistEvery: number;
 
     private busy = false;
     private lastRunAt = Number.NEGATIVE_INFINITY;
-    private lastAlertAt = Number.NEGATIVE_INFINITY;
 
     private readonly lastEvaluated = new Map<string, number>();
-    private readonly lastPersisted = new Map<string, { status: string; direction: string; endSequence: number }>();
 
     private results: UiResult[] = [];
     private lowCoverage = new Set<string>();
@@ -84,11 +81,9 @@ export class CorrelationService {
     };
 
     constructor(
-        storage: LocalRepository,
         deps: CorrelationDeps,
         options: CorrelationServiceOptions = {}
     ) {
-        this.storage = storage;
         this.deps = deps;
 
         this.requiredSampleSize = calculateSampleSizeCorrelation(
@@ -103,16 +98,14 @@ export class CorrelationService {
             power: options.power ?? 0.8,
             strongThreshold: options.strongThreshold ?? 0.7,
             maxLag: options.maxLag ?? 5,
-            maxWindow: Math.max(options.maxWindow ?? 300, this.requiredSampleSize),
+            maxWindow: Math.max(options.maxWindow ?? DEFAULT_CORRELATION_WINDOW, this.requiredSampleSize),
             minCoverage: options.minCoverage ?? 0.8,
             gapPolicy: 'compact',
         };
         this.transform = options.transform ?? 'raw';
         this.scopes = options.scopes?.length ? options.scopes : [{}];
         this.analysisIntervalMs = options.analysisIntervalMs ?? 1000;
-        this.alertCooldownMs = options.alertCooldownMs ?? 30000;
-        this.evaluateEvery = Math.max(1, options.evaluateEveryIntervals ?? 1);
-        this.persistEvery = Math.max(1, options.persistEveryIntervals ?? 30);
+        this.evaluateEvery = Math.max(1, options.evaluateEveryIntervals ?? 10);
     }
 
     getResults(): CorrelationPairResult[] { return this.results; }
@@ -134,105 +127,112 @@ export class CorrelationService {
         const sessionId = this.deps.identity.sessionId();
         let dashboardFindings: CorrelationFinding[] = [];
 
+        const durable = this.deps.finding.durable;
+        const consistency = durable ? 'committed' : 'live';
+        const bounds = this.deps.queries.latestWindow(this.parameters.maxWindow, consistency);
+        if (!bounds) return;
+        const endSequence = bounds.sequenceTo;
+
         for (let s = 0; s < this.scopes.length; s++) {
             const scope = this.scopes[s];
-            const query = this.deps.queries.recent(this.parameters.maxWindow, {
-                consistency: 'committed',
-                method: scope.method,
-                route: scope.route
+
+            const due = PAIRS.filter(pair => {
+                const last = this.lastEvaluated.get(this.seriesFor(sessionId, scope, pair));
+                return last === undefined || endSequence - last >= this.evaluateEvery;
             });
-            const points = query.points;
+            if (due.length === 0) continue;
+
+            const result = await this.deps.queries.query({
+                sessionId,
+                from: bounds.from,
+                to: bounds.to,
+                method: scope.method,
+                route: scope.route,
+                consistency,
+            });
+            const points = result.points.filter(p => p.sequenceFrom >= bounds.sequenceFrom && p.sequenceTo <= endSequence);
             if (points.length === 0) continue;
 
-            const endSequence = points[points.length - 1].sequenceTo;
             const findings: CorrelationFinding[] = [];
-            const toPersist: Array<{
-                finding: CorrelationFinding;
-                series: string;
-            }> = [];
-
-            for (const pair of PAIRS) {
-                const pid = pairId(pair.x, pair.y);
-                const series = seriesKey({
-                    sessionId, scope, pairId: pid, resolutionMs: null,
-                    transform: this.transform, parameters: this.parameters,
-                });
-
-                const last = this.lastEvaluated.get(series);
-                if (last !== undefined && endSequence - last < this.evaluateEvery) continue;
-
+            for (const pair of due) {
+                const series = this.seriesFor(sessionId, scope, pair);
+                this.lastEvaluated.set(series, endSequence);
                 try {
-                    const prepared = prepareSeries(points, pair, this.transform, this.parameters.minCoverage);
-                    const result = runAnalysis(prepared, pair, this.parameters);
-
-                    const key = evaluationKey(series, endSequence, prepared.digest);
-                    const finding: CorrelationFinding = {
-                        findingId: findingIdFor({ sessionId, scope, pairId: pid, windowEndSequence: endSequence, evaluationKey: key }),
-                        evaluationKey: key,
-                        sessionId,
-                        instanceId: this.deps.identity.instanceId,
-                        scope,
-                        metricX: pair.x,
-                        metricY: pair.y,
-                        windowStart: prepared.windowStart,
-                        windowEnd: prepared.windowEnd,
-                        resolutionMs: null,
-                        transform: this.transform,
-                        methodVersion: CORRELATION_METHOD_VERSION,
-                        parameters: this.parameters,
-                        input: {
-                            sessionId,
-                            bucketCount: prepared.bucketCount,
-                            ranges: prepared.ranges,
-                            digest: prepared.digest,
-                        },
-                        inputSchemaVersion: INPUT_SCHEMA_VERSION,
-                        createdAt: new Date(now).toISOString(),
-                        source: 'live',
-                        validPairCount: prepared.validPairCount,
-                        droppedPairCount: prepared.droppedPairCount,
-                        coverage: prepared.coverage,
-                        qualityFlags: prepared.qualityFlags,
-                        result,
-                    };
-
-                    this.lastEvaluated.set(series, endSequence);
-                    findings.push(finding);
-                    if (this.shouldPersist(series, finding, endSequence)) toPersist.push({ finding, series });
+                    findings.push(this.buildFinding(sessionId, scope, pair, points, now));
                 } catch (err) {
-                    Logger.error(`Correlation analysis failed for ${pid}:`, err);
+                    Logger.error(`Correlation analysis failed for ${pairId(pair.x, pair.y)}:`, err);
                 }
             }
 
-            const saved = await Promise.all(toPersist.map(t =>
-                this.deps.finding.save(t.finding).catch(() => false)));
-            toPersist.forEach((t, i) => {
-                if (saved[i]) {
-                    this.lastPersisted.set(t.series, {
-                        status: String(t.finding.result.status),
-                        direction: String(t.finding.result.direction),
-                        endSequence,
-                    });
-                } else {
-                    Logger.error(`Correlation finding not persisted: ${t.finding.findingId}`);
-                }
-            });
+            let committed: CorrelationFinding[];
+            if (durable) {
+                const saved = await Promise.all(findings.map(f => this.deps.finding.save(f).catch(() => false)));
+                committed = findings.filter((f, i) => {
+                    if (!saved[i]) Logger.error(`Correlation finding not persisted, not published: ${f.findingId}`);
+                    return saved[i];
+                });
+            } else {
+                committed = findings.map(f => ({ ...f, qualityFlags: [...f.qualityFlags, 'NOT_PERSISTED'].sort() }));
+            }
 
-            if (s === 0) dashboardFindings = findings;
+            if (s === 0) dashboardFindings = committed;
         }
 
-        if (dashboardFindings.length > 0) this.publish(dashboardFindings, now);
+        if (dashboardFindings.length > 0) this.publish(dashboardFindings);
     }
 
-    private shouldPersist(series: string, f: CorrelationFinding, endSequence: number): boolean {
-        if (f.result.status === 'INSUFFICIENT_DATA') return false;
-        const prev = this.lastPersisted.get(series);
-        if (!prev) return true;
-        if (prev.status !== String(f.result.status) || prev.direction !== String(f.result.direction)) return true;
-        return endSequence - prev.endSequence >= this.persistEvery;
+    private seriesFor(sessionId: string, scope: CorrelationScope, pair: PairConfig): string {
+        return seriesKey({
+            sessionId, scope, pairId: pairId(pair.x, pair.y), resolutionMs: null,
+            transform: this.transform, parameters: this.parameters,
+        });
     }
 
-    private publish(findings: CorrelationFinding[], now: number): void {
+    private buildFinding(sessionId: string, scope: CorrelationScope, pair: PairConfig, points: SeriesPoint[], now: number): CorrelationFinding {
+        const pid = pairId(pair.x, pair.y);
+        const prepared = prepareSeries(points, pair, this.transform, this.parameters.minCoverage);
+        const result = runAnalysis(prepared, pair, this.parameters);
+
+        const endSequence = prepared.windowEndSequence;
+        const key = evaluationKey(this.seriesFor(sessionId, scope, pair), endSequence, prepared.digest);
+        return {
+            findingId: findingIdFor({ sessionId, scope, pairId: pid, windowEndSequence: endSequence, evaluationKey: key }),
+            evaluationKey: key,
+            sessionId,
+            instanceId: this.deps.identity.instanceId,
+            scope,
+            metricX: pair.x,
+            metricY: pair.y,
+            windowStart: prepared.windowStart,
+            windowEnd: prepared.windowEnd,
+            resolutionMs: null,
+            transform: this.transform,
+            methodVersion: CORRELATION_METHOD_VERSION,
+            parameters: this.parameters,
+            input: {
+                sessionId,
+                bucketCount: prepared.bucketCount,
+                ranges: prepared.ranges,
+                digest: prepared.digest,
+            },
+            inputSchemaVersion: INPUT_SCHEMA_VERSION,
+            createdAt: new Date(now).toISOString(),
+            source: 'live',
+            validPairCount: prepared.validPairCount,
+            droppedPairCount: prepared.droppedPairCount,
+            coverage: prepared.coverage,
+            qualityFlags: prepared.qualityFlags,
+            result,
+        };
+    }
+
+    async replay(findingId: string): Promise<ReplayOutcome> {
+        const finding = await this.deps.finding.find(findingId);
+        if (!finding) return { status: 'NOT_FOUND', findingId };
+        return verifyFinding(this.deps.queries, finding);
+    }
+
+    private publish(findings: CorrelationFinding[]): void {
         const byId = new Map(findings.map(f => [`${f.metricX}->${f.metricY}`, f]));
         const results: UiResult[] = [];
         const lowCoverage = new Set<string>();
@@ -248,7 +248,6 @@ export class CorrelationService {
         this.results = results;
         this.lowCoverage = lowCoverage;
         this.assessment = this.assess(results);
-        this.alertIfNeeded(now);
     }
 
     private toUiResult(pair: PairConfig, f: CorrelationFinding): UiResult {
@@ -317,11 +316,19 @@ export class CorrelationService {
         };
     }
 
-    private alertIfNeeded(now: number): void {
-        if (this.assessment.status !== 'POSSIBLE_SATURATION') return;
-        if (now - this.lastAlertAt < this.alertCooldownMs) return;
-
-        this.lastAlertAt = now;
-        this.storage.alerts.warning(this.assessment.recommendation);
+    relatedFindings(metric: string): RelatedFinding[] {
+        return this.results
+            .filter(r => {
+                const [x, y] = r.id.split('->');
+                return (x === metric || y === metric) && !this.lowCoverage.has(r.id)
+                    && (r.analysis.status === 'STRONG_LINEAR_ASSOCIATION' || r.analysis.status === 'STRONG_MONOTONIC_NONLINEAR_ASSOCIATION');
+            })
+            .map(r => ({
+                findingId: r.findingId,
+                pairId: r.id,
+                status: String(r.analysis.status),
+                direction: String(r.analysis.direction),
+                pearsonR: r.analysis.pearsonR,
+            }));
     }
 }

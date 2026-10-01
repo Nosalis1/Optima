@@ -1,5 +1,6 @@
 import {
     ConnectedSocket,
+    MessageBody,
     OnGatewayConnection,
     OnGatewayDisconnect,
     SubscribeMessage,
@@ -11,7 +12,7 @@ import type { Server, Socket } from 'socket.io';
 
 import type { WebSocketAdapter } from '../adapters/websocket.adapter';
 
-import { WebSocketEvents } from '../core/delivery';
+import { WebSocketEvents, parseBucketsRequest } from '../core/delivery';
 import Logger from '../core/telemetry/logger';
 import type { AnalyticsFilterSettings } from '../core/domain';
 import { Inject } from '@nestjs/common';
@@ -80,9 +81,9 @@ export class NestWebSocketAdapter
     )
     async handleSessionSummary(
         @ConnectedSocket() socket: Socket,
-        payload: { sessionNumber: number },
+        @MessageBody() payload: { sessionNumber: number },
     ): Promise<void> {
-        const { sessionNumber } = payload;
+        const sessionNumber = Number(payload?.sessionNumber);
 
         const summary = await this.dependencies.persistence.getSessionSummary(sessionNumber);
 
@@ -105,27 +106,15 @@ export class NestWebSocketAdapter
     }
 
     @SubscribeMessage(
-        WebSocketEvents.REQUEST_DASHBOARD_DATA,
-    )
-    handleDashboardData(
-        @ConnectedSocket() socket: Socket,
-    ): void {
-        socket.emit(
-            WebSocketEvents.RESPONSE_DASHBOARD_DATA,
-            this.dependencies.collector.getDashboardData(),
-        );
-    }
-
-    @SubscribeMessage(
         WebSocketEvents.REQUEST_ANALYTICS_DATA,
     )
     handleAnalyticsData(
         @ConnectedSocket() socket: Socket,
-        payload: { filters: AnalyticsFilterSettings },
+        @MessageBody() payload: { filters: AnalyticsFilterSettings },
     ): void {
         socket.emit(
             WebSocketEvents.RESPONSE_ANALYTICS_DATA,
-            this.dependencies.collector.getAnalyticsData(payload.filters),
+            this.dependencies.collector.getAnalyticsData(payload?.filters ?? undefined),
         );
     }
 
@@ -150,6 +139,51 @@ export class NestWebSocketAdapter
         socket.emit(
             WebSocketEvents.RESPONSE_CORRELATION_DATA,
             this.dependencies.correlation.pack(),
+        );
+    }
+
+    @SubscribeMessage(
+        WebSocketEvents.REQUEST_INCIDENTS,
+    )
+    handleIncidents(
+        @ConnectedSocket() socket: Socket,
+    ): void {
+        socket.emit(
+            WebSocketEvents.RESPONSE_INCIDENTS,
+            this.dependencies.incidents.snapshot(),
+        );
+    }
+
+    @SubscribeMessage(
+        WebSocketEvents.REQUEST_DASHBOARD_BUCKETS,
+    )
+    async handleDashboardBuckets(
+        @ConnectedSocket() socket: Socket,
+        @MessageBody() payload: unknown,
+    ): Promise<void> {
+        const req = parseBucketsRequest(payload);
+        if (!req) return;
+        try {
+            socket.emit(
+                WebSocketEvents.RESPONSE_DASHBOARD_BUCKETS,
+                await this.dependencies.dashboard.getBackFill(req),
+            );
+        } catch (err) {
+            Logger.error('Dashboard backfill failed:', err);
+        }
+    }
+
+    @SubscribeMessage(
+        WebSocketEvents.REQUEST_CORRELATION_REPLAY,
+    )
+    async handleCorrelationReplay(
+        @ConnectedSocket() socket: Socket,
+        @MessageBody() payload: { findingId: string },
+    ): Promise<void> {
+        const findingId = String(payload?.findingId);
+        socket.emit(
+            WebSocketEvents.RESPONSE_CORRELATION_REPLAY,
+            { findingId, outcome: await this.dependencies.correlation.replay(findingId) },
         );
     }
 

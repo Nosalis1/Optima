@@ -1,3 +1,5 @@
+import type { Incident } from './incident.types';
+
 
 export type SessionStatus = 'RUNNING' | 'COMPLETED' | 'INTERRUPTED';
 
@@ -7,7 +9,7 @@ export type SessionRecord = {
     startedAt: string;
     endedAt: string | null;
     lastPersistedAt: string | null;
-    lastCommitedSequence: number;
+    lastCommittedSequence: number;
     status: SessionStatus;
 }
 
@@ -16,31 +18,62 @@ export interface SessionManifest {
     sessions: SessionRecord[];
 }
 
-export interface HourlyBucket {
-    hourStart: string;
+export interface SessionSummaryPoint {
+    startTime: string;
+    durationMs: number;
+    requestCount: number;
+    rps: number;
+    maxRps: number;
+    p95: number;
+    serverErrorRate: number;
     clientErrorCount: number;
     serverErrorCount: number;
-    avgRps: number;
-    maxRps: number;
-    avgLatency: number;
-    maxLatency: number;
-    healthyEndpointCount: number;
-    slowEndpointCount: number;
-    sampleCount: number;
+}
+
+export interface SessionRouteImpact {
+    method: string;
+    route: string;
+    requestCount: number;
+    impactedRequests: number;
+    p95: number;
+    serverErrorRate: number;
 }
 
 export interface SessionSummary {
+    sessionId: string;
     sessionNumber: number;
+    status: SessionStatus;
     startedAt: string;
     endedAt: string | null;
     windowStart: string;
     windowEnd: string;
-    clientErrorCount: number;
-    serverErrorCount: number;
-    avgRps: number;
-    maxRps: number;
-    avgLatency: number;
-    maxLatency: number;
-    perHour: HourlyBucket[];
-    sampleCount: number;
+    measuredMs: number;
+    traffic: {
+        requestCount: number;
+        avgRps: number;
+        peakRps: number;
+    };
+    latency: {
+        p50: number;
+        p95: number;
+        p99: number;
+        max: number;
+    };
+    errors: {
+        serverErrorCount: number;
+        serverErrorRate: number;
+        clientErrorCount: number;
+    };
+    incidents: Incident[];
+    topRoutes: SessionRouteImpact[];
+    series: {
+        resolutionMs: number;
+        points: SessionSummaryPoint[];
+    };
+    quality: {
+        bucketCount: number;
+        missingIntervals: number;
+        conflicts: number;
+        complete: boolean;
+    };
 }

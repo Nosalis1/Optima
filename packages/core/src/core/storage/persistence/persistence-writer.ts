@@ -2,7 +2,7 @@ import * as fsp from 'fs/promises';
 import Logger from '../../telemetry/logger';
 import { constructFilePath, type StoredRecord } from '../utility/index';
 
-export type PersistenceCategory = 'http_requests' | 'system_health' | 'events' | 'correlation' | 'metric_buckets';
+export type PersistenceCategory = 'http_requests' | 'events' | 'correlation' | 'metric_buckets';
 
 export type StorageStatus = 'OK' | 'DEGRADED';
 
@@ -39,7 +39,8 @@ export class PersistenceWriter {
 
     private _status: StorageStatus = 'OK';
     private _lostRecords = 0;
-    private _commitedSequence = 0;
+    private _completedJobs = 0;
+    private _lastError: { description: string; message: string; at: string } | null = null;
 
     constructor(options: WriterOptions = {}) {
         this.maxQueue = options.maxQueue ?? 1000;
@@ -50,11 +51,13 @@ export class PersistenceWriter {
 
     get status(): StorageStatus { return this._status; }
     get lostRecords(): number { return this._lostRecords; }
-    get commitedSequence(): number { return this._commitedSequence; }
+    get completedJobs(): number { return this._completedJobs; }
+    get lastError() { return this._lastError; }
+    get isAccepting(): boolean { return this.accepting; }
     get pending(): number { return this.queue.length; }
 
     enqueueAppend<T>(baseDir: string, category: PersistenceCategory, items: RecordInput<T>[], opts: { date?: Date } = {}): Promise<number> {
-        if (items.length === 0) return Promise.resolve(this._commitedSequence);
+        if (items.length === 0) return Promise.resolve(this._completedJobs);
 
         const createdAt = new Date().toISOString();
         const records: StoredRecord<T>[] = items.map(i => ({
@@ -142,9 +145,14 @@ export class PersistenceWriter {
 
             this.queue.shift();
             if (ok) {
-                this._commitedSequence++;
-                job.resolve(this._commitedSequence);
+                this._completedJobs++;
+                job.resolve(this._completedJobs);
             } else {
+                this._lastError = {
+                    description: job.description,
+                    message: lastErr instanceof Error ? lastErr.message : String(lastErr),
+                    at: new Date().toISOString()
+                };
                 this.markLost(job.recordCount);
                 Logger.error(`PersistenceWriter: giving up on "${job.description}":`, lastErr);
                 job.reject(lastErr instanceof Error ? lastErr : new Error(String(lastErr)));

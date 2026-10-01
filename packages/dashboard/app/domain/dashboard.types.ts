@@ -1,5 +1,5 @@
-import { AlertMessage, PaginationMeta } from './common.types';
-import { CpuMetrics, MemoryMetrics, EventLoopMetrics, GCMetrics, LibuvHandles, HistoricTimeSeries, HistoricTickSeries } from './metrics.types';
+import { PaginationMeta } from './common.types';
+import { CpuMetrics, MemoryMetrics, EventLoopMetrics, GCMetrics, LibuvHandles, HistoricGapSeries } from './metrics.types';
 import { V8RuntimeInfo } from './system.types';
 import { EndpointTelemetry, EndpointLatencyDistribution, EndpointVolume } from './endpoints.types';
 
@@ -36,24 +36,11 @@ export interface DashboardData {
         heapSize: number;
     };
 
+    timeline: number[];
     // Stream history arrays
-    history: HistoricTimeSeries;
-    impactEndpoints: EndpointTelemetry[];
-    alerts: AlertMessage[];
-
+    history: HistoricGapSeries;
     // Explicit chart configuration maps matching chart configurations directly
-    charts: DashboardChartData<number[]>;
-}
-
-// Tick data for the dashboard, representing a snapshot of metrics at a specific point in time
-export interface DashboardTickData {
-    current: DashboardData['current'];
-
-    history: HistoricTickSeries;
-    impactEndpoints: DashboardData['impactEndpoints'];
-    alerts: DashboardData['alerts'];
-
-    charts: DashboardChartData<number>;
+    charts: DashboardChartData<Array<number | null>>;
 }
 
 // Deep analytics engine slice
@@ -72,6 +59,7 @@ export interface AnalyticsData {
         pagination: PaginationMeta;
     };
     history: EndpointTelemetry[][];
+    impactEndpoints: EndpointTelemetry[];
 }
 
 // Hardware & Engine instance health slice
@@ -83,11 +71,21 @@ export interface HealthData {
     garbageCollection: GCMetrics;
     runtime: V8RuntimeInfo;
     history: {
-        eventLoopLag: number[];
+        timeline: number[];
+        eventLoopLag: Array<number | null>;
         memoryBreakdown: {
-            usedHeap: number[];
-            totalHeap: number[];
-            rssMemory: number[];
+            usedHeap: Array<number | null>;
+            totalHeap: Array<number | null>;
+            rssMemory: Array<number | null>;
         };
     };
+}
+
+export interface HealthDetails {
+    cpu: Pick<CpuMetrics, 'numberOfCores' | 'perCoreUsage'>;
+    memory: Pick<MemoryMetrics, 'rssMemoryTotal' | 'externalMemory'>;
+    eventLoop: Pick<EventLoopMetrics, 'threshold'>;
+    handles: LibuvHandles;
+    garbageCollection: GCMetrics;
+    runtime: V8RuntimeInfo;
 }

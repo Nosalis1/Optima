@@ -28,10 +28,6 @@ export enum WebSocketEvents {
     REQUEST_SYSTEM_DATA = "request-system-data",
     RESPONSE_SYSTEM_DATA = "response-system-data",
 
-    REQUEST_DASHBOARD_DATA = "request-dashboard-data",
-    RESPONSE_DASHBOARD_DATA = "response-dashboard-data",
-    RESPONSE_DASHBOARD_TICK_DATA = "response-dashboard-tick-data",
-
     REQUEST_ANALYTICS_DATA = "request-analytics-data",
     RESPONSE_ANALYTICS_DATA = "response-analytics-data",
     RESPONSE_FILTERED_ANALYTICS_DATA = "response-filtered-analytics-data",
@@ -41,34 +37,33 @@ export enum WebSocketEvents {
 
     REQUEST_CORRELATION_DATA = "request-correlation-data",
     RESPONSE_CORRELATION_DATA = "response-correlation-data",
+
+    REQUEST_CORRELATION_REPLAY = "request-correlation-replay",
+    RESPONSE_CORRELATION_REPLAY = "response-correlation-replay",
+
+    REQUEST_INCIDENTS = "request-incidents",
+    RESPONSE_INCIDENTS = "response-incidents",
+
+    REQUEST_DASHBOARD_BUCKETS = "request-dashboard-buckets",
+    RESPONSE_DASHBOARD_BUCKETS = "response-dashboard-buckets",
 }
 
 export function ConnectionProvider({
     children
 }: { children: React.ReactNode }) {
     const [isConnected, setIsConnected] = React.useState(false);
-    const [isConnecting, setIsConnecting] = React.useState(false);
+    const [isConnecting, setIsConnecting] = React.useState(true);
 
     const [configuration, setConfiguration] = React.useState<ConfigOptions | null>(null);
 
     const socketRef = React.useRef<Socket | null>(null);
 
     React.useEffect(() => {
-        if (isConnecting || isConnected) return;
-
-        if (socketRef.current) {
-            socketRef.current.disconnect();
-            socketRef.current = null;
-        }
-
-        setIsConnected(false);
-        setIsConnecting(true);
-
         const serverUrl = (typeof window !== 'undefined'
             ? window.location.origin
             : 'http://localhost:3000');
 
-        socketRef.current = io(serverUrl,
+        const socket = io(serverUrl,
             {
                 path: '/socket.io/',
                 transports: ["polling", "websocket"],
@@ -80,30 +75,34 @@ export function ConnectionProvider({
                 timeout: 20000,
             }
         );
+        socketRef.current = socket;
 
-        socketRef.current.on("connect", () => {
+        const onConfiguration = (data: ConfigOptions) => setConfiguration(data);
+        socket.on(WebSocketEvents.RESPONSE_CONFIGURATION, onConfiguration);
+
+        socket.on("connect", () => {
             setIsConnected(true);
             setIsConnecting(false);
-
-            emit(WebSocketEvents.REQUEST_CONFIGURATION, null);
+            socket.emit(WebSocketEvents.REQUEST_CONFIGURATION, null);
         });
 
-        socketRef.current.on("disconnect", () => {
+        socket.on("disconnect", () => {
             setIsConnected(false);
-            socketRef.current = null;
-        });
-
-        registerEventListener(WebSocketEvents.RESPONSE_CONFIGURATION, (data: ConfigOptions) => {
-            setConfiguration(data);
         });
 
         return () => {
-            socketRef.current?.disconnect();
-            socketRef.current = null;
+            socket.removeAllListeners();
+            socket.disconnect();
+            if (socketRef.current === socket) socketRef.current = null;
             setIsConnected(false);
             setIsConnecting(false);
         };
     }, []);
+
+    function emit(event: WebSocketEvents, data: any) {
+        if (!socketRef.current?.connected) return;
+        socketRef.current.emit(event, data);
+    }
 
     function registerEventListener(event: WebSocketEvents, callback: (...args: any[]) => void) {
         socketRef.current?.on(event, callback);
@@ -113,9 +112,6 @@ export function ConnectionProvider({
         socketRef.current?.off(event, callback);
     }
 
-    function emit(event: WebSocketEvents, data: any) {
-        socketRef.current?.emit(event, data);
-    }
 
     return (
         <ConnectionContext.Provider value={{

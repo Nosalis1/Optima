@@ -25,11 +25,6 @@ export class ApplicationEventManager {
         if (this.initilized) return;
         this.initilized = true;
         this.on((event) => this.persistence.onApplicationEvent(event));
-        this.on(async (event) => {
-            if (event.type === 'SHUTDOWN') {
-                await this.persistence.shutdown();
-            }
-        });
     }
 
     stop() {
@@ -56,6 +51,7 @@ export class ApplicationEventManager {
             type: event.type,
             applicationVersion: this.applicationVersion,
             reason: event.reason || '',
+            ...(event.details ? { details: event.details } : {}),
         };
         // Using Promise.allSettled to ensure all listeners are called, even if some fail
         // But this is causing strange race conditions, so we will call them sequentially for now

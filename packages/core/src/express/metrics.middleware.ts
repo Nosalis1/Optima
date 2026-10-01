@@ -9,6 +9,8 @@ const adapter: HttpAdapter<Request, Response> = new ExpressAdapter();
 export const createExpressMetricsMiddleware = (dependencies: OptimaRuntimeDependencies): RequestHandler => {
     return (req: Request, res: Response, next: NextFunction) => {
         const startHrTime = process.hrtime.bigint();
+        const done = dependencies.telemetry.track();
+        res.on('close', done);
 
         res.on('finish', () => {
             const requestData = adapter.getRequest(req);
@@ -28,6 +30,7 @@ export const createExpressMetricsMiddleware = (dependencies: OptimaRuntimeDepend
                     telemetryRequest.responseTime
                 );
             }
+            done();
         });
 
         next();

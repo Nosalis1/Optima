@@ -179,16 +179,14 @@ export class TrafficSimulator {
 
         this.timer = setInterval(() => {
             if (IS_STABLE) {
-                const request = createStableRequest();
-                this.repository.record(request);
+                this.repository.record({ ...createStableRequest(), origin: 'synthetic' });
             } else {
                 const multiplier = scenario.trafficMultiplier;
 
                 const amount = Math.floor(baseRequests * multiplier);
 
                 for (let i = 0; i < amount; i++) {
-                    const request = createRequest();
-                    this.repository.record(request);
+                    this.repository.record({ ...createRequest(), origin: 'synthetic' });
                 }
             }
         }, interval);

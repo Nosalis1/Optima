@@ -1,206 +1,148 @@
-import type {
-    DashboardData,
-    DashboardTickData
-} from '../domain';
-import type { LocalRepository } from '../storage';
-import {
-    deriveMetrics,
-    type MetricBucket
-} from '../storage/stores/bucket-metric';
-import { deriveEndpointView } from '../storage/stores/bucket-view';
-import type { SeriesPoint } from './telemetry-query.service';
+import { deriveMetrics, deriveRuntime } from '../storage/stores/bucket-metric';
+import type { TelemetryQueryService, SeriesPoint, QueryIssue } from './telemetry-query.service';
+import type { BucketsMessage, BucketsRequest, LiveBucketDto } from '../domain';
 
-const DASHBOARD_HISTORY_LENGTH = 60;
-const MAX_IMPACT_ENDPOINTS = 10;
-const MAX_ALERTS = 5;
-const IMPACT_P95_THRESHOLD_MS = 500;
+const LIVE_WINDOW = 5;
+const DEFAULT_BACKFILL_LIMIT = 120;
+const MAX_BACKFILL_LIMIT = 600;
+const FALLBACK_BACKFILL_MS = 10 * 60_000;
+const MAX_BACKFILL_AGE_MS = 60 * 60_000;
 
-type Derived = ReturnType<typeof deriveMetrics>;
+export function toLiveBucketDto(sessionId: string, p: SeriesPoint): LiveBucketDto {
+    const m = deriveMetrics(p.requests, p.durationMs);
+    const rt = deriveRuntime(p.runtime, p.durationMs);
+    return {
+        bucketId: `${sessionId}:${p.sequenceTo}`,
+        sequence: p.sequenceTo,
+        startTime: p.startTime,
+        endTime: p.endTime,
+        durationMs: p.durationMs,
+        committed: p.committed === true,
+        qualityFlags: p.qualityFlags,
 
-interface Snapshot {
-    points: SeriesPoint[];
-    derived: Derived[];
-    latest: SeriesPoint;
-    latestDerived: Derived;
-    sequence: number;
+        requestCount: m.requestCount,
+        clientErrorCount: m.clientErrorCount,
+        serverErrorCount: m.serverErrorCount,
+        rps: m.rps,
+        averageLatencyMs: m.averageLatency,
+        p50Ms: m.p50,
+        p95Ms: m.p95,
+        p99Ms: m.p99,
+        errorRate: m.errorRate,
+
+        runtime: {
+            eventLoopLagMs: rt.eventLoopDelayMeanMs ?? 0,
+            heapUsageBytes: rt.heapUsedBytes ?? 0,
+            heapSizeBytes: rt.heapTotalBytes ?? 0,
+            rssMemoryBytes: rt.rssBytes ?? 0,
+            heapLimitBytes: rt.heapLimitBytes ?? 0,
+            cpuPercent: rt.cpuPercent ?? 0,
+            cpuUserPercent: rt.cpuUserPercent ?? 0,
+            cpuSystemPercent: rt.cpuSystemPercent ?? 0,
+        }
+    }
 }
 
 export class DashboardService {
-
-    private lastTickSequence = 0;
-
     constructor(
-        private readonly storage: LocalRepository
+        private readonly queries: TelemetryQueryService,
+        private readonly currentSessionId: () => string
     ) { }
 
-    private fillRest(arr: number[], length: number = DASHBOARD_HISTORY_LENGTH, fillValue: number = 0): number[] {
-        const filledValues = [...arr];
-        while (filledValues.length < length) {
-            filledValues.unshift(fillValue);
+    /**
+     * Get the latest live buckets message from RAM
+     * @returns BucketsMessage | null
+     */
+    getLive(): BucketsMessage | null {
+        const sessionId = this.currentSessionId();
+        const result = this.queries.recent(LIVE_WINDOW, { consistency: 'live' });
+        if (result.points.length === 0) return null;
+
+        const buckets = result.points.map(p => toLiveBucketDto(sessionId, p));
+        return {
+            subscriptionId: null,
+            sessionId,
+            kind: 'live',
+            buckets,
+            lastSequence: buckets[buckets.length - 1].sequence,
+            requestedAfterSequence: null,
+            gaps: [],
+            truncated: false,
+            serverTime: new Date().toISOString(),
+        };
+    }
+
+    async getBackFill(req: BucketsRequest): Promise<BucketsMessage> {
+        const sessionId = this.currentSessionId();
+        const limit = Math.min(Math.max(1, Math.floor(req.limit ?? DEFAULT_BACKFILL_LIMIT)), MAX_BACKFILL_LIMIT);
+        const after = req.sessionId === sessionId && typeof req.afterSequence === 'number' && req.afterSequence >= 0
+            ? Math.floor(req.afterSequence) : null;
+
+        const message = (points: SeriesPoint[], gaps: Array<[number, number]>, truncated: boolean): BucketsMessage => {
+            const buckets = points.map(p => toLiveBucketDto(sessionId, p));
+            return {
+                subscriptionId: req.subscriptionId,
+                sessionId,
+                kind: 'backfill',
+                buckets,
+                lastSequence: buckets.length ? buckets[buckets.length - 1].sequence : null,
+                requestedAfterSequence: after,
+                gaps,
+                truncated,
+                serverTime: new Date().toISOString(),
+            };
+        };
+
+        const newest = this.queries.latestWindow(1, 'live');
+        if (!newest) return message([], [], false);
+
+        if (after === null) {
+            const result = this.queries.recent(limit, { consistency: 'live' });
+            return message(result.points, gapsOf(result.issues), false);
         }
-        return filledValues;
-    }
+        if (after >= newest.sequenceTo) return message([], [], false);
 
-    private getLatestBucket(): MetricBucket | null {
-        return this.storage.bucket.latest() ?? null;
-    }
+        const now = Date.now();
+        const known = this.queries.liveBucket(after)?.endTime
+            ?? this.queries.liveBucket(after + 1)?.startTime
+            ?? req.afterEndTime;
+        const requestedFrom = known ? Date.parse(known) : now - FALLBACK_BACKFILL_MS;
+        const from = Math.max(Number.isNaN(requestedFrom) ? now - FALLBACK_BACKFILL_MS : requestedFrom, now - MAX_BACKFILL_AGE_MS);
 
-    private buildCurrent(latest: MetricBucket, derived: ReturnType<typeof deriveMetrics>): DashboardData['current'] {
-        return {
-            rps: Math.round(derived.rps),
-            latency: derived.averageLatency,
-            errorRate: derived.errorRate,
-            eventLoopLag: latest.runtime.loopDelay.meanMs,
-            heapUsage: latest.runtime.memoryUsage.heapUsage,
-            heapSize: latest.runtime.memoryUsage.heapSize
-        };
-    }
+        const result = await this.queries.query({
+            sessionId,
+            from: new Date(from).toISOString(),
+            to: newest.to,
+            consistency: 'live',
+        });
 
-    private buildHistory(history: MetricBucket[], derived: ReturnType<typeof deriveMetrics>[]): DashboardData['history'] {
-        return {
-            rps: this.fillRest(derived.map(m => Math.round(m.rps))),
-            latency: this.fillRest(derived.map(m => m.averageLatency)),
-            errorRate: this.fillRest(derived.map(m => m.errorRate)),
-            eventLoopLag: this.fillRest(history.map(b => b.runtime.loopDelay.meanMs)),
-            heapUsage: this.fillRest(history.map(b => b.runtime.memoryUsage.heapUsage)),
-            heapSize: this.fillRest(history.map(b => b.runtime.memoryUsage.heapSize)),
-            rssMemory: this.fillRest(history.map(b => b.runtime.memoryUsage.rssMemory)),
-            totalHeap: this.fillRest(history.map(b => b.runtime.memoryUsage.heapLimit)),
-            p95: this.fillRest(derived.map(m => m.p95)),
-            p99: this.fillRest(derived.map(m => m.p99))
-        };
-    }
-
-    private buildHistoryLatest(latest: MetricBucket, derived: ReturnType<typeof deriveMetrics>): DashboardTickData['history'] {
-        return {
-            rps: derived.rps,
-            latency: derived.averageLatency,
-            errorRate: derived.errorRate,
-            eventLoopLag: latest.runtime.loopDelay.meanMs,
-            heapUsage: latest.runtime.memoryUsage.heapUsage,
-            heapSize: latest.runtime.memoryUsage.heapSize,
-            rssMemory: latest.runtime.memoryUsage.rssMemory,
-            totalHeap: latest.runtime.memoryUsage.heapLimit,
-            p95: derived.p95,
-            p99: derived.p99
-        };
-    }
-
-    private buildCharts(history: MetricBucket[], derived: ReturnType<typeof deriveMetrics>[]): DashboardData['charts'] {
-        return {
-            throughput: {
-                rps: this.fillRest(derived.map(m => Math.round(m.rps))),
-                errorClient: this.fillRest(derived.map(m => m.clientErrorCount)),
-                errorServer: this.fillRest(derived.map(m => m.serverErrorCount)),
-                totalCount: derived.length
-            },
-            percentiles: {
-                p50: this.fillRest(derived.map(m => m.p50)),
-                p95: this.fillRest(derived.map(m => m.p95)),
-                p99: this.fillRest(derived.map(m => m.p99)),
-                totalCount: derived.length
-            },
-            runtimePerformance: {
-                heapUsage: this.fillRest(history.map(b => b.runtime.memoryUsage.heapUsage)),
-                heapSize: this.fillRest(history.map(b => b.runtime.memoryUsage.heapSize)),
-                lag: this.fillRest(history.map(b => b.runtime.loopDelay.meanMs)),
-                totalCount: history.length
-            }
-        };
-    }
-
-    private buildChartsLatest(latest: MetricBucket, derived: ReturnType<typeof deriveMetrics>): DashboardTickData['charts'] {
-        return {
-            throughput: {
-                rps: derived.rps,
-                errorClient: derived.clientErrorCount,
-                errorServer: derived.serverErrorCount,
-                totalCount: 1
-            },
-            percentiles: {
-                p50: derived.p50,
-                p95: derived.p95,
-                p99: derived.p99,
-                totalCount: 1
-            },
-            runtimePerformance: {
-                heapUsage: latest.runtime.memoryUsage.heapUsage,
-                heapSize: latest.runtime.memoryUsage.heapSize,
-                lag: latest.runtime.loopDelay.meanMs,
-                totalCount: 1
-            }
+        let points = result.points.filter(p => p.sequenceFrom > after && p.sequenceTo <= newest.sequenceTo);
+        let truncated = false;
+        if (points.length > limit) {
+            truncated = true;
+            points = points.slice(0, limit);
         }
+
+        const sourceFailed = result.issues.some(i => i.type === 'SOURCE_ERROR');
+        const upper = truncated ? points[points.length - 1].sequenceTo : newest.sequenceTo;
+        const gaps = sourceFailed ? [] : missingRanges(after + 1, upper, points);
+        return message(points, gaps, truncated);
     }
+}
 
-    private buildImpactEndpoints(derived: ReturnType<typeof deriveEndpointView>): DashboardData['impactEndpoints'] {
-        if (derived.length === 0) return [];
+function gapsOf(issues: QueryIssue[]): Array<[number, number]> {
+    return issues
+        .filter((i): i is Extract<QueryIssue, { type: 'GAP' }> => i.type === 'GAP')
+        .map(i => [i.fromSequence, i.toSequence] as [number, number]);
+}
 
-        const filtered = derived.filter(e => e.errorRate > 0 || e.p95 > IMPACT_P95_THRESHOLD_MS);
-        const sorted = filtered.sort((a, b) =>
-            (b.errorRate * 1000 + b.p95) -
-            (a.errorRate * 1000 + a.p95)
-        );
-        const sliced = sorted.slice(0, MAX_IMPACT_ENDPOINTS);
-
-        return sliced.map(e => ({
-            method: e.method,
-            route: e.route,
-            rps: e.rps,
-            requestCount: e.requestCount,
-            averageLatency: e.averageLatency,
-            minLatency: e.minLatency,
-            p50: e.p50,
-            p95: e.p95,
-            p99: e.p99,
-            errorRate: e.errorRate,
-            status: e.status
-        }));
+function missingRanges(from: number, to: number, points: readonly SeriesPoint[]): Array<[number, number]> {
+    const ranges: Array<[number, number]> = [];
+    let next = from;
+    for (const p of [...points].sort((a, b) => a.sequenceFrom - b.sequenceFrom)) {
+        if (p.sequenceFrom > next) ranges.push([next, Math.min(p.sequenceFrom - 1, to)]);
+        next = Math.max(next, p.sequenceTo + 1);
     }
-
-    getDashboardData(): DashboardData | null {
-        const latest = this.getLatestBucket();
-        if (!latest) return null;
-        const bucketHistory = this.storage.bucket.getHistory();
-
-        const derivedMetricsLatest = deriveMetrics(latest.requests, latest.durationMs);
-        const derivedMetricsHistory = bucketHistory.map(b => deriveMetrics(b.requests, b.durationMs));
-        const derivedEndpointView = deriveEndpointView(bucketHistory);
-
-        const current = this.buildCurrent(latest, derivedMetricsLatest);
-        const history = this.buildHistory(bucketHistory, derivedMetricsHistory);
-        const charts = this.buildCharts(bucketHistory, derivedMetricsHistory);
-        const impactEndpoints = this.buildImpactEndpoints(derivedEndpointView);
-        const alerts = this.storage.alerts.get(MAX_ALERTS);
-
-        return {
-            current,
-            history,
-            charts,
-            impactEndpoints,
-            alerts
-        };
-    }
-
-    getDashboardLatest(): DashboardTickData | null {
-        const latest = this.getLatestBucket();
-        if (!latest) return null;
-        const bucketHistory = this.storage.bucket.getHistory();
-
-        const derivedMetricsLatest = deriveMetrics(latest.requests, latest.durationMs);
-        const derivedEndpointView = deriveEndpointView(bucketHistory);
-
-        const current = this.buildCurrent(latest, derivedMetricsLatest);
-        const history = this.buildHistoryLatest(latest, derivedMetricsLatest);
-        const charts = this.buildChartsLatest(latest, derivedMetricsLatest);
-        const impactEndpoints = this.buildImpactEndpoints(derivedEndpointView);
-        const alerts = this.storage.alerts.get(MAX_ALERTS);
-
-        return {
-            current,
-            history,
-            charts,
-            impactEndpoints,
-            alerts
-        };
-    }
+    if (next <= to) ranges.push([next, to]);
+    return ranges;
 }

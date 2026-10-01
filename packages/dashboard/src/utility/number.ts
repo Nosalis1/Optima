@@ -19,3 +19,8 @@ export const formatBigNumber = (num?: number): string => {
   }
   return num.toString();
 }
+const BYTES_PER_MB = 1024 * 1024;
+
+export const bytesToMB = (bytes: number): number => Math.round((bytes / BYTES_PER_MB) * 100) / 100;
+
+export const bytesToMBOrNull = (bytes: number | null): number | null => bytes === null ? null : bytesToMB(bytes);

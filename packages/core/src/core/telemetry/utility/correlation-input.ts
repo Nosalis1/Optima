@@ -1,5 +1,5 @@
 import { analyzeCorrelation } from './correlation-analysis';
-import { deriveMetrics } from '../../storage/stores/bucket-metric';
+import { deriveMetrics, deriveRuntime } from '../../storage/stores/bucket-metric';
 import type { SeriesPoint } from '../telemetry-query.service';
 import type { CorrelationDirection } from '../../domain';
 import {
@@ -22,10 +22,10 @@ export interface Metric {
 export const METRICS = {
     rps: { label: 'RPS', select: p => finite(deriveMetrics(p.requests, p.durationMs).rps) },
     errorRate: { label: 'error rate', select: p => whenRequests(p, m => m.errorRate) },
-    heapUsage: { label: 'heap memory', select: p => finite(p.runtime.memoryUsage.heapUsage) },
+    heapUsage: { label: 'heap memory', select: p => finite(p.runtime.heapUsedBytes) },
     p95Latency: { label: 'p95 latency', select: p => whenRequests(p, m => m.p95) },
     averageLatency: { label: 'average latency', select: p => whenRequests(p, m => m.averageLatency) },
-    eventLoopLag: { label: 'event loop lag', select: p => finite(p.runtime.loopDelay.meanMs) },
+    eventLoopLag: { label: 'event loop lag', select: p => finite(deriveRuntime(p.runtime, p.durationMs).eventLoopDelayMeanMs) },
 } satisfies Record<string, Metric>;
 
 export type MetricKey = keyof typeof METRICS;

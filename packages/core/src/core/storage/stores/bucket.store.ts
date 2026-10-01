@@ -3,6 +3,7 @@ import {
     createAggregate,
     recordInto,
     deepFreeze,
+    BUCKET_SCHEMA_VERSION,
     type MetricBucket,
     type RequestAggregate,
     type Origin
@@ -36,6 +37,8 @@ export class BucketStore {
     private lastCommitted = 0;
     private readonly committed = new Set<number>();
     private open: OpenInterval;
+    private sealed = false;
+    private _droppedAfterSeal = 0;
 
     constructor(
         private readonly runtime: RuntimeStore,
@@ -48,6 +51,7 @@ export class BucketStore {
     }
 
     record(input: { method: string; route: string; duration: number; statusCode: number; origin?: Origin }): void {
+        if (this.sealed) { this._droppedAfterSeal++; return; }
         const cur = this.open;
         if (!recordInto(cur.requests, input.duration, input.statusCode)) return;
 
@@ -74,12 +78,14 @@ export class BucketStore {
         recordInto(entry.aggregate, input.duration, input.statusCode);
     }
 
-    flush(opts: { force?: boolean }): MetricBucket | null {
+    flush(opts: { force?: boolean; seal?: boolean } = {}): MetricBucket | null {
+        if (this.sealed) return null;
+        if (opts.seal) this.sealed = true;
         const nowHr = process.hrtime.bigint();
         const cur = this.open;
         const elapsedMs = Number(nowHr - cur.startHr) / 1e6;
         if (!opts.force && elapsedMs < this.intervalMs) return null;
-        if (opts.force && elapsedMs < 1) return null;
+        if (opts.force && elapsedMs < 1 && cur.requests.requestCount === 0) return null;
 
         const endWall = Date.now();
         const flags = new Set(cur.flags);
@@ -91,10 +97,10 @@ export class BucketStore {
         const sequence = ++this.sequence;
         const origin: Origin = cur.syntheticSeen ? 'synthetic' : cur.realSeen ? 'real' : (this.options.originProvider?.() ?? 'real');
 
-        const runtime = this.runtime.collect();
+        const runtime = this.runtime.closeInterval();
 
         const bucket = deepFreeze<MetricBucket>({
-            schemaVersion: 2,
+            schemaVersion: BUCKET_SCHEMA_VERSION,
             bucketId: `${this.options.sessionId}:${sequence}`,
             sessionId: this.options.sessionId,
             instanceId: this.options.instanceId,
@@ -117,11 +123,13 @@ export class BucketStore {
     get instanceId(): string { return this.options.instanceId; }
     markCommitted(sequence: number): void {
         this.committed.add(sequence);
+        if (sequence > this.lastCommitted) this.lastCommitted = sequence;
         const oldest = this.history.values()[0]?.sequence ?? sequence;
         for (const s of this.committed) if (s < oldest) this.committed.delete(s);
     }
     isCommitted(sequence: number): boolean { return this.committed.has(sequence); }
     get lastCommittedSequence(): number { return this.lastCommitted; }
+    get droppedAfterSeal(): number { return this._droppedAfterSeal; }
     getHistory(): MetricBucket[] { return this.history.values(); }
     latest(): MetricBucket | undefined { return this.history.latest(); }
 

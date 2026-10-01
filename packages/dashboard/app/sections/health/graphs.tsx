@@ -1,8 +1,11 @@
 import { Card } from '@/app/components/cards/card';
 import { LineGraph } from '@/src/components/graphs';
+import { bytesToMBOrNull } from '@/src/utility/number';
 import { type HealthData } from '@/app/domain';
 
 type Props = { data: HealthData; };
+
+const formatSecondsAgo = (value: number) => Math.round(value) === 0 ? 'now' : `${Math.round(value)}s`;
 
 export default function HealthGraphs({ data }: Props) {
     return (
@@ -16,13 +19,14 @@ export default function HealthGraphs({ data }: Props) {
                     data={[
                         {
                             label: "Event Loop Lag",
-                            points: data.history.eventLoopLag.map((value, index) => ({ x: index, y: value })),
+                            points: data.history.eventLoopLag.map((value, index) => ({ x: data.history.timeline[index], y: value })),
                             color: "var(--chart-3)",
                             type: 'solid',
                             fillArea: false
                         }
                     ]}
                     withDots={false}
+                    formatXLabel={formatSecondsAgo}
                 />
             </Card>
 
@@ -34,28 +38,29 @@ export default function HealthGraphs({ data }: Props) {
                 <LineGraph
                     data={[
                         {
-                            label: "Used",
-                            points: data.history.memoryBreakdown.usedHeap.map((value, index) => ({ x: index, y: value })),
+                            label: "Used MB",
+                            points: data.history.memoryBreakdown.usedHeap.map((value, index) => ({ x: data.history.timeline[index], y: bytesToMBOrNull(value) })),
                             color: "var(--chart-3)",
                             type: 'solid',
                             fillArea: false
                         },
                         {
-                            label: "Total",
-                            points: data.history.memoryBreakdown.totalHeap.map((value, index) => ({ x: index, y: value })),
+                            label: "Total MB",
+                            points: data.history.memoryBreakdown.totalHeap.map((value, index) => ({ x: data.history.timeline[index], y: bytesToMBOrNull(value) })),
                             color: "var(--chart-2)",
                             type: 'dashed',
                             fillArea: false
                         },
                         {
-                            label: "RSS",
-                            points: data.history.memoryBreakdown.rssMemory.map((value, index) => ({ x: index, y: value })),
+                            label: "RSS MB",
+                            points: data.history.memoryBreakdown.rssMemory.map((value, index) => ({ x: data.history.timeline[index], y: bytesToMBOrNull(value) })),
                             color: "var(--chart-4)",
                             type: 'solid',
                             fillArea: false
                         }
                     ]}
                     withDots={false}
+                    formatXLabel={formatSecondsAgo}
                 />
             </Card>
         </div>

@@ -4,14 +4,15 @@ import type {
 import type {
     SystemStaticInfo,
     AnalyticsData,
-    DashboardData,
-    DashboardTickData,
-    HealthData,
+    HealthDetails,
     SessionRecord,
     SessionManifest,
     SessionSummary,
     AnalyticsFilterSettings,
     CorrelationData,
+    BucketsMessage,
+    BucketsRequest,
+    IncidentsSnapshot,
 } from "../domain";
 import {
     WebSocketEvents
@@ -19,10 +20,10 @@ import {
 
 export interface MetricsDataProvider {
     getSystemStaticInfo(): SystemStaticInfo;
-    getDashboardData(): DashboardData;
-    getDashboardTickData(): DashboardTickData;
+    getLiveBuckets(): BucketsMessage | null;
+    getBackFill(req: BucketsRequest): Promise<BucketsMessage>;
     getAnalyticsData(filters?: AnalyticsFilterSettings): AnalyticsData;
-    getHealthData(): HealthData;
+    getHealthData(): HealthDetails;
 }
 
 export interface SessionDataProvider {
@@ -31,18 +32,21 @@ export interface SessionDataProvider {
     getSessionSummary(sessionNumber: number): Promise<SessionSummary | null>;
 }
 
+export interface IncidentDataProvider {
+    snapshot(): IncidentsSnapshot;
+}
+
 export interface CorrelationDataProvider {
     pack(): CorrelationData;
+    replay(findingId: string): Promise<unknown>;
 }
 
 type MetricsPublishedData = {
     systemStaticInfo: SystemStaticInfo;
-    dashboardData: DashboardData;
-    dashboardTickData: DashboardTickData;
     analyticsData: AnalyticsData;
-    healthData: HealthData;
+    healthData: HealthDetails;
     correlationData: CorrelationData;
-} | null;
+} | null; //! Remove this
 
 export class MetricsPublisher {
     private publishData: MetricsPublishedData = null;
@@ -51,14 +55,13 @@ export class MetricsPublisher {
         private readonly provider: MetricsDataProvider,
         private readonly sessionProvider: SessionDataProvider,
         private readonly correlationProvider: CorrelationDataProvider,
+        private readonly incidentProvider: IncidentDataProvider,
         private readonly websocket: WebSocketAdapter,
     ) { }
 
     publish(): void {
         this.publishData = {
             systemStaticInfo: this.provider.getSystemStaticInfo(),
-            dashboardData: this.provider.getDashboardData(),
-            dashboardTickData: this.provider.getDashboardTickData(),
             analyticsData: this.provider.getAnalyticsData(),
             healthData: this.provider.getHealthData(),
             correlationData: this.correlationProvider.pack(),
@@ -68,7 +71,6 @@ export class MetricsPublisher {
             WebSocketEvents.RESPONSE_SYSTEM_DATA,
             this.publishData.systemStaticInfo
         );
-        this.websocket.broadcast(WebSocketEvents.RESPONSE_DASHBOARD_TICK_DATA, this.publishData.dashboardTickData);
         this.websocket.broadcast(
             WebSocketEvents.RESPONSE_ANALYTICS_DATA,
             this.publishData.analyticsData
@@ -81,9 +83,16 @@ export class MetricsPublisher {
             WebSocketEvents.RESPONSE_CORRELATION_DATA,
             this.publishData.correlationData
         );
-    }
 
-    retrieveLastPublishedData(): MetricsPublishedData {
-        return this.publishData;
+        this.websocket.broadcast(
+            WebSocketEvents.RESPONSE_INCIDENTS,
+            this.incidentProvider.snapshot()
+        );
+
+        const live = this.provider.getLiveBuckets();
+        if (live) this.websocket.broadcast(
+            WebSocketEvents.RESPONSE_DASHBOARD_BUCKETS,
+            live
+        );
     }
 }

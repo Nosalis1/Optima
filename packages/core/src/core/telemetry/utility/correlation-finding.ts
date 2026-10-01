@@ -3,6 +3,7 @@ import type { analyzeCorrelation } from "./correlation-analysis";
 
 export const CORRELATION_METHOD_VERSION = 'cor-2.0.0';
 export const INPUT_SCHEMA_VERSION = 2;
+export const DEFAULT_CORRELATION_WINDOW = 300;
 
 export type CorrelationTransform = 'raw' | 'detrend' | 'difference';
 export type CorrelationResult = ReturnType<typeof analyzeCorrelation>;

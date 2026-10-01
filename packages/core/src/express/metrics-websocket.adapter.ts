@@ -11,9 +11,11 @@ import type {
 } from '../adapters/websocket.adapter';
 import {
     type CorrelationDataProvider,
+    type IncidentDataProvider,
     type MetricsDataProvider,
     type SessionDataProvider,
-    WebSocketEvents
+    WebSocketEvents,
+    parseBucketsRequest
 } from '../core/delivery';
 import { ConfigManager } from '../config';
 import Logger from '../core/telemetry/logger';
@@ -26,7 +28,8 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
         private readonly server: HTTPServer,
         private readonly provider: MetricsDataProvider,
         private readonly sessionProvider: SessionDataProvider,
-        private readonly correlationProvider: CorrelationDataProvider
+        private readonly correlationProvider: CorrelationDataProvider,
+        private readonly incidentProvider: IncidentDataProvider
     ) { }
 
     init(): void {
@@ -120,16 +123,6 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
         );
 
         socket.on(
-            WebSocketEvents.REQUEST_DASHBOARD_DATA,
-            () => {
-                socket.emit(
-                    WebSocketEvents.RESPONSE_DASHBOARD_DATA,
-                    this.provider.getDashboardData()
-                )
-            }
-        );
-
-        socket.on(
             WebSocketEvents.REQUEST_ANALYTICS_DATA,
             (filters) => {
                 if (filters === null) {
@@ -162,6 +155,39 @@ export class ExpressWebSocketAdapter implements WebSocketAdapter {
                 socket.emit(
                     WebSocketEvents.RESPONSE_CORRELATION_DATA,
                     this.correlationProvider.pack()
+                )
+            }
+        );
+
+        socket.on(
+            WebSocketEvents.REQUEST_INCIDENTS,
+            () => {
+                socket.emit(
+                    WebSocketEvents.RESPONSE_INCIDENTS,
+                    this.incidentProvider.snapshot()
+                )
+            }
+        );
+
+        socket.on(
+            WebSocketEvents.REQUEST_DASHBOARD_BUCKETS,
+            async (raw: unknown) => {
+                const req = parseBucketsRequest(raw);
+                if (!req) return;
+                try {
+                    socket.emit(WebSocketEvents.RESPONSE_DASHBOARD_BUCKETS, await this.provider.getBackFill(req));
+                } catch (err) {
+                    Logger.error('Dashboard backfill failed:', err);
+                }
+            }
+        );
+
+        socket.on(
+            WebSocketEvents.REQUEST_CORRELATION_REPLAY,
+            async ({ findingId }: { findingId: string }) => {
+                socket.emit(
+                    WebSocketEvents.RESPONSE_CORRELATION_REPLAY,
+                    { findingId, outcome: await this.correlationProvider.replay(String(findingId)) }
                 )
             }
         );

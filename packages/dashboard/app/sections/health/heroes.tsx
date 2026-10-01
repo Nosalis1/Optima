@@ -2,15 +2,24 @@ import { Card } from '@/app/components/cards/card';
 import { type HealthData } from '@/app/domain';
 import ProgressGraph from '@/src/components/graphs/progress';
 import { Hero, HeroHeader, HeroContent } from '../../components/cards/hero';
+import { bytesToMB } from '@/src/utility/number';
 
 type Props = {
     data: HealthData;
 };
 
 export default function HealthHeroes({ data }: Props) {
+    const memory = {
+        heapUsage: bytesToMB(data.memory.heapUsage),
+        heapSize: bytesToMB(data.memory.heapSize),
+        rssMemory: bytesToMB(data.memory.rssMemory),
+        rssMemoryTotal: bytesToMB(data.memory.rssMemoryTotal),
+        externalMemory: bytesToMB(data.memory.externalMemory),
+    };
+
     const smallHeroes = [
-        { label: "RSS Memory", value: `${data.memory.rssMemory.toFixed(2)} MB`, sublabel: `/ ${data.memory.rssMemoryTotal.toFixed(2)} MB total`, color: "var(--chart-1)" },
-        { label: "External Memory", value: `${data.memory.externalMemory.toFixed(2)} MB`, sublabel: "native C++ objects", color: "var(--chart-2)" },
+        { label: "RSS Memory", value: `${memory.rssMemory.toFixed(2)} MB`, sublabel: `/ ${memory.rssMemoryTotal.toFixed(2)} MB total`, color: "var(--chart-1)" },
+        { label: "External Memory", value: `${memory.externalMemory.toFixed(2)} MB`, sublabel: "native C++ objects", color: "var(--chart-2)" },
         { label: "GC Pause Average", value: `${data.garbageCollection.gcPauseAverage.toFixed(2)} ms`, sublabel: "milliseconds", color: "var(--chart-3)" },
         { label: "Active Handles", value: `${data.handles.activeHandles}`, sublabel: `timers: ${data.handles.activeHandlesTimers} * sockets: ${data.handles.activeHandlesSockets}`, color: "var(--chart-4)" },
     ];
@@ -48,36 +57,36 @@ export default function HealthHeroes({ data }: Props) {
                 <Hero>
                     <HeroHeader
                         title="Heap Usage"
-                        value={data.memory.heapUsage}
+                        value={memory.heapUsage}
                         unit="MB"
                         color="[var(--chart-2)]"
                     />
 
                     <ProgressGraph
                         data={[
-                            { label: 'Heap Usage', value: data.memory.heapUsage, color: 'var(--chart-2)' },
+                            { label: 'Heap Usage', value: memory.heapUsage, color: 'var(--chart-2)' },
                         ]}
-                        maxValue={data.memory.heapSize}
+                        maxValue={memory.heapSize}
                     />
 
                     <HeroContent
                         values={{
-                            "Heap Size": `${data.memory.heapSize.toFixed(2)} MB`,
-                            "External Memory": `${data.memory.externalMemory.toFixed(2)} MB`,
+                            "Heap Size": `${memory.heapSize.toFixed(2)} MB`,
+                            "External Memory": `${memory.externalMemory.toFixed(2)} MB`,
                         }}
                     />
 
                     <ProgressGraph
                         data={[
-                            { label: 'RSS Memory', value: data.memory.rssMemory, color: 'var(--chart-5)' },
+                            { label: 'RSS Memory', value: memory.rssMemory, color: 'var(--chart-5)' },
                         ]}
-                        maxValue={data.memory.rssMemoryTotal}
+                        maxValue={memory.rssMemoryTotal}
                     />
 
                     <HeroContent
                         values={{
-                            "RSS Memory": `${data.memory.rssMemory.toFixed(2)} MB`,
-                            "RSS Memory Total": `${data.memory.rssMemoryTotal.toFixed(2)} MB`,
+                            "RSS Memory": `${memory.rssMemory.toFixed(2)} MB`,
+                            "RSS Memory Total": `${memory.rssMemoryTotal.toFixed(2)} MB`,
                         }}
                     />
                 </Hero>

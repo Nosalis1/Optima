@@ -11,7 +11,8 @@ export type ReplayOutcome =
     | { status: 'INPUT_MISSING'; expectedBuckets: number; foundBuckets: number }
     | { status: 'INPUT_CHANGED'; storedDigest: string; replayedDigest: string }
     | { status: 'RESULT_DIFFERS'; replayed: CorrelationFinding }
-    | { status: 'UNSUPPORTED'; reason: string };
+    | { status: 'UNSUPPORTED'; reason: string }
+    | { status: 'NOT_FOUND'; findingId: string };
 
 const inRanges = (seqFrom: number, seqTo: number, ranges: Array<[number, number]>) =>
     ranges.some(([a, b]) => seqFrom >= a && seqTo <= b);

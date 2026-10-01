@@ -1,6 +1,8 @@
 import {
     createAggregate,
     mergeInto,
+    mergeRuntimeInto,
+    emptyRuntime,
     deriveMetrics,
     type MetricBucket,
     type RequestAggregate,
@@ -37,6 +39,7 @@ export interface SeriesPoint {
     endpoints?: EndpointAggregate[];
     runtime: RuntimeInterval;
     qualityFlags: string[];
+    committed: boolean | null;
 }
 
 export interface MetricsQueryResult {
@@ -110,6 +113,8 @@ interface Group {
     endpoints?: Map<string, EndpointAggregate>;
     runtime: RuntimeInterval;
     flags: Set<string>;
+    committedCount: number;
+    uncommittedCount: number;
 }
 
 class SeriesAccumulator {
@@ -125,7 +130,7 @@ class SeriesAccumulator {
         readonly issues: QueryIssue[]
     ) { }
 
-    add(b: MetricBucket): void {
+    add(b: MetricBucket, committed: boolean | null): void {
         if (this.prevSequence !== null) {
             if (b.sequence <= this.prevSequence) {
                 this.issues.push({ type: 'OUT_OF_ORDER', bucketId: b.bucketId });
@@ -154,8 +159,10 @@ class SeriesAccumulator {
                 requests: createAggregate(),
                 maxRps: 0,
                 endpoints: this.q.includeEndpoints ? new Map() : undefined,
-                runtime: b.runtime,
+                runtime: emptyRuntime(),
                 flags: new Set(),
+                committedCount: 0,
+                uncommittedCount: 0
             };
             this.groups.set(key, g);
         }
@@ -164,13 +171,14 @@ class SeriesAccumulator {
         g.maxRps = Math.max(g.maxRps, bucketRps);
         g.durationMs += b.durationMs;
         g.bucketCount++;
+        if (committed === true) g.committedCount++;
+        else if (committed === false) g.uncommittedCount++;
         if (b.startTime < g.startTime) g.startTime = b.startTime;
         if (b.endTime > g.endTime) g.endTime = b.endTime;
         g.sequenceFrom = Math.min(g.sequenceFrom, b.sequence);
-        if (b.sequence >= g.sequenceTo) {
-            g.sequenceTo = b.sequence;
-            g.runtime = b.runtime;
-        }
+        const isLatest = b.sequence >= g.sequenceTo;
+        if (isLatest) g.sequenceTo = b.sequence;
+        mergeRuntimeInto(g.runtime, b.runtime, isLatest);
         for (const f of b.qualityFlags) g.flags.add(f);
 
         if (g.endpoints) {
@@ -201,6 +209,7 @@ class SeriesAccumulator {
                 endpoints: g.endpoints ? [...g.endpoints.values()] : undefined,
                 runtime: g.runtime,
                 qualityFlags: [...g.flags].sort(),
+                committed: g.uncommittedCount > 0 ? false : g.committedCount === g.bucketCount ? true : null
             }));
 
         return {
@@ -227,7 +236,7 @@ export class TelemetryQueryService {
     async query(q: MetricsQuery): Promise<MetricsQueryResult> {
         const issues: QueryIssue[] = [];
         const acc = new SeriesAccumulator(q, issues);
-        for await (const b of this.buckets(q, i => issues.push(i))) acc.add(b);
+        for await (const e of this.buckets(q, i => issues.push(i))) acc.add(e.bucket, e.committed);
         return acc.finish();
     }
 
@@ -255,11 +264,33 @@ export class TelemetryQueryService {
         };
 
         const acc = new SeriesAccumulator(q, []);
-        for (const e of entries) acc.add(e.bucket);
+        for (const e of entries) acc.add(e.bucket, e.committed);
         return acc.finish();
     }
 
-    async *buckets(q: MetricsQuery, onIssue: (i: QueryIssue) => void): AsyncGenerator<MetricBucket> {
+    latestWindow(count: number, consistency: MetricsQuery['consistency']): {
+        sessionId: string; from: string; to: string; sequenceFrom: number; sequenceTo: number;
+    } | null {
+        const entries = this.deps.live.snapshot()
+            .filter(e => consistency === 'live' || e.committed)
+            .slice(-Math.max(1, count));
+        if (entries.length === 0) return null;
+        const first = entries[0].bucket;
+        const last = entries[entries.length - 1].bucket;
+        return {
+            sessionId: this.deps.currentSessionId(),
+            from: first.startTime,
+            to: last.endTime,
+            sequenceFrom: first.sequence,
+            sequenceTo: last.sequence,
+        };
+    }
+
+    liveBucket(sequence: number): MetricBucket | undefined {
+        return this.deps.live.snapshot().find(e => e.bucket.sequence === sequence)?.bucket;
+    }
+
+    async *buckets(q: MetricsQuery, onIssue: (i: QueryIssue) => void): AsyncGenerator<LiveBucketEntry> {
         const { fromMs, toMs } = parseRange(q);
         const isCurrent = q.sessionId === this.deps.currentSessionId();
 
@@ -283,7 +314,7 @@ export class TelemetryQueryService {
                         continue;
                     }
                     handled.add(b.bucketId);
-                    yield b;
+                    yield { bucket: b, committed: true };
                 }
             } catch (err) {
                 onIssue({ type: 'SOURCE_ERROR', detail: err instanceof Error ? err.message : String(err) });
@@ -292,7 +323,7 @@ export class TelemetryQueryService {
 
         for (const e of ram) {
             if (handled.has(e.bucket.bucketId)) continue;
-            yield e.bucket;
+            yield e;
         }
     }
 }

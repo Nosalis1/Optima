@@ -2,9 +2,8 @@ import type {
     AnalyticsData,
     CorrelationData,
     DashboardData,
-    HealthData,
+    HealthDetails,
     SessionRecord,
-    SessionSummary,
 } from '../../domain';
 
 const mock = (min: number, max: number): number => {
@@ -29,6 +28,8 @@ export function mockDashboardData(): DashboardData {
             heapSize: mock(100, 500),
         },
 
+        timeline: Array.from({ length: ARRAY_LENGTH }, (_, i) => i - ARRAY_LENGTH + 1),
+
         // Stream history arrays
         history: {
             rps: mockArray(ARRAY_LENGTH, 50, 200),
@@ -42,55 +43,6 @@ export function mockDashboardData(): DashboardData {
             p95: mockArray(ARRAY_LENGTH, 0, 100),
             p99: mockArray(ARRAY_LENGTH, 0, 100),
         },
-        impactEndpoints: [
-            {
-                method: 'GET',
-                route: '/api/v1/users',
-                rps: mock(50, 200),
-                p50: mock(100, 500),
-                p95: mock(100, 500),
-                p99: mock(0, 100),
-                errorRate: mock(0, 0.1),
-                status: 'OK',
-                requestCount: mock(1000, 5000),
-                averageLatency: mock(100, 500),
-            },
-            {
-                method: 'POST',
-                route: '/api/v1/orders',
-                rps: mock(50, 200),
-                p50: mock(100, 500),
-                p95: mock(100, 500),
-                p99: mock(0, 100),
-                errorRate: mock(0, 0.1),
-                status: 'OK',
-                requestCount: mock(1000, 5000),
-                averageLatency: mock(100, 500),
-            }
-        ],
-        alerts: [
-            {
-                title: 'High error rate detected',
-                timestamp: new Date().toISOString(),
-                severity: 'warning',
-            },
-            {
-                title: 'Latency spike detected',
-                timestamp: new Date().toISOString(),
-                severity: 'critical',
-            },
-            {
-                title: 'New endpoint added',
-                timestamp: new Date().toISOString(),
-                severity: 'info',
-            },
-            {
-                title: 'Server memory usage high',
-                timestamp: new Date().toISOString(),
-                severity: 'advisory',
-            }
-        ],
-
         // Explicit chart configuration maps matching chart configurations directly
         charts: {
             throughput: {
@@ -159,6 +111,7 @@ export function mockAnalyticsData(): AnalyticsData {
             // }
         ],
         history: [],
+        impactEndpoints: [],
         endpointsTable: {
             data: [
                 {
@@ -196,25 +149,17 @@ export function mockAnalyticsData(): AnalyticsData {
     }
 }
 
-export function mockHealthData(): HealthData {
+export function mockHealthDetails(): HealthDetails {
     return {
         cpu: {
-            usageRate: 12.5,
             numberOfCores: 8,
             perCoreUsage: mockArray(ARRAY_LENGTH, 0, 100),
-            userUsage: 12.5,
-            systemUsage: 40,
-            idleUsage: 100 - 52.5,
         },
         memory: {
-            heapUsage: mock(0, 1000),
-            heapSize: 1000,
-            rssMemory: mock(0, 16000),
             rssMemoryTotal: 16000,
             externalMemory: mock(0, 1000),
         },
         eventLoop: {
-            lag: mock(0, 200),
             threshold: 200,
         },
         handles: {
@@ -262,65 +207,12 @@ export function mockHealthData(): HealthData {
                 bootstrapTime: mock(0, 1000),
                 requiredModules: mock(0, 100),
             },
-        },
-        history: {
-            eventLoopLag: mockArray(ARRAY_LENGTH, 0, 100),
-            memoryBreakdown: {
-                usedHeap: mockArray(ARRAY_LENGTH, 0, 1000),
-                totalHeap: mockArray(ARRAY_LENGTH, 0, 1000),
-                rssMemory: mockArray(ARRAY_LENGTH, 0, 1000),
-            }
         }
     }
 }
 
 export function mockSessionData(): SessionRecord[] {
     return [];
-}
-
-export function mockSessionSummary(sessionNumber: number): SessionSummary {
-    function generateDummyHours(count: number): SessionSummary["perHour"] {
-        const hours: SessionSummary["perHour"] = [];
-        const now = new Date();
-        for (let i = 0; i < count; i++) {
-            const hourStart = new Date(now.getTime() - i * 60 * 60 * 1000);
-            const clientErrorCount = Math.floor(Math.random() * 10);
-            const serverErrorCount = Math.floor(Math.random() * 5);
-            const min = Math.max(clientErrorCount, serverErrorCount) + 1;
-            const avgRps = min + Math.floor(Math.random() * 100);
-            const latency = Math.random() * 220;
-            const ec = Math.floor(Math.random() * 10);
-            hours.push({
-                hourStart: hourStart.toISOString(),
-                clientErrorCount: clientErrorCount,
-                serverErrorCount: serverErrorCount,
-                avgRps: avgRps,
-                maxRps: avgRps + Math.floor(Math.random() * 50),
-                avgLatency: latency,
-                maxLatency: latency + Math.random() * 250,
-                healthyEndpointCount: ec + Math.floor(Math.random() * 10),
-                slowEndpointCount: ec + Math.floor(Math.random() * 5),
-                sampleCount: Math.floor(Math.random() * 1000)
-            });
-        }
-        return hours;
-    }
-
-    return {
-        sessionNumber: sessionNumber,
-        startedAt: new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString(),
-        endedAt: new Date().toISOString(),
-        windowStart: new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString(),
-        windowEnd: new Date().toISOString(),
-        clientErrorCount: 214,
-        serverErrorCount: 164,
-        avgRps: 110,
-        maxRps: 220,
-        avgLatency: 250,
-        maxLatency: 500,
-        sampleCount: 10000,
-        perHour: generateDummyHours(24)
-    }
 }
 
 export function mockCorrelationData(): CorrelationData {

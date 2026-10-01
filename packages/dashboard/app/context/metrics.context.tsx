@@ -8,17 +8,31 @@ import type {
     AnalyticsData,
     CorrelationData,
     DashboardData,
-    DashboardTickData,
+    EndpointTelemetry,
     HealthData,
+    HealthDetails,
     SessionRecord,
     SessionSummary,
     SystemStaticInfo,
     SystemStatus,
+    BucketsMessage,
+    IncidentsSnapshot,
 } from '../domain';
-import { mockDashboardData, mockAnalyticsData, mockHealthData, mockSessionData, mockCorrelationData } from '../components/utility/mocking';
+import { mockAnalyticsData, mockHealthDetails, mockSessionData, mockCorrelationData } from '../components/utility/mocking';
+import {
+    initialLiveState,
+    liveBucketsReducer,
+    toDashboardSeries,
+    toHealthData,
+    selectWindow,
+    emptyDashboardSeries
+} from "../stores/live-bucket.store";
+
+const BACKFILL_TIMEOUT_MS = 5000;
 
 const MetricsContext = React.createContext<{
     data: MetricsData;
+    dashboard: DashboardData;
     analyticsFilterSettings: AnalyticsFilterSettings;
     updateAnalyticsFilters: (newFilters: Partial<AnalyticsFilterSettings>) => void;
     sessions: SessionRecord[];
@@ -28,14 +42,20 @@ const MetricsContext = React.createContext<{
     downloadSession: (sessionNumber: number) => Promise<void>;
 } | null>(null);
 
-export type MetricsData = {
+type MetricsState = {
     systemStatus: SystemStatus;
     systemInfo: SystemStaticInfo;
-    dashboard: DashboardData;
     analytics: AnalyticsData;
-    health: HealthData;
+    healthDetails: HealthDetails;
     correlation: CorrelationData;
+
+    impactEndpoints: EndpointTelemetry[];
+    incidents: IncidentsSnapshot;
 }
+
+export type MetricsData = Omit<MetricsState, 'healthDetails'> & {
+    health: HealthData;
+};
 
 export type AnalyticsFilterSettings = {
     query: string;
@@ -46,9 +66,18 @@ export type AnalyticsFilterSettings = {
 export function MetricsProvider({
     children
 }: { children: React.ReactNode }) {
-    const { isConnected, registerEventListener, emit } = useConnection();
+    const { isConnected, registerEventListener, unregisterEventListener, emit } = useConnection();
 
-    const [data, setData] = React.useState<MetricsData>({
+    const subscriptionId = React.useRef(crypto.randomUUID());
+    const backfillPending = React.useRef<{ afterSequence: number | null; timer: ReturnType<typeof setTimeout> } | null>(null);
+
+    const [live, dispatch] = React.useReducer(liveBucketsReducer, initialLiveState);
+    const liveRef = React.useRef(live);
+    React.useEffect(() => { liveRef.current = live; }, [live]);
+
+    const liveWindow = React.useMemo(() => selectWindow(live), [live]);
+
+    const [state, setData] = React.useState<MetricsState>({
         systemStatus: {
             connectionStatus: 'ONLINE',
             healthStatus: 'HEALTHY',
@@ -59,11 +88,23 @@ export function MetricsProvider({
             uptime: 800,
             env: 'development'
         },
-        dashboard: mockDashboardData(),
         analytics: mockAnalyticsData(),
-        health: mockHealthData(),
+        healthDetails: mockHealthDetails(),
+        impactEndpoints: [],
+        incidents: { rules: [], incidents: [], serverTime: '' },
         correlation: mockCorrelationData()
     });
+
+    const dashboard = React.useMemo<DashboardData>(
+        () => liveWindow.latest ? toDashboardSeries(liveWindow) : emptyDashboardSeries(),
+        [liveWindow]
+    );
+
+    const data = React.useMemo<MetricsData>(() => {
+        const { healthDetails, ...rest } = state;
+        return { ...rest, health: toHealthData(liveWindow, healthDetails) };
+    }, [state, liveWindow]);
+
     const [filters, setFilters] = React.useState<AnalyticsFilterSettings>({
         query: '',
         method: 'ALL',
@@ -78,136 +119,71 @@ export function MetricsProvider({
         return f.query !== '' || f.method !== 'ALL' || f.page !== 1;
     }
 
-    function appendTickData(newTick: DashboardTickData) {
-        function append<T>(values: T[], value: T): T[] {
-            values.push(value);
-            if (values.length > 60) {
-                values.shift();
-            }
-            return values;
-        }
-
-        setData(prev => ({
-            ...prev,
-            dashboard: {
-                ...prev.dashboard,
-
-                current: newTick.current,
-                history: {
-                    rps: append(prev.dashboard.history.rps, newTick.history.rps),
-                    latency: append(prev.dashboard.history.latency, newTick.history.latency),
-                    errorRate: append(prev.dashboard.history.errorRate, newTick.history.errorRate),
-                    eventLoopLag: append(prev.dashboard.history.eventLoopLag, newTick.history.eventLoopLag),
-                    heapUsage: append(prev.dashboard.history.heapUsage, newTick.history.heapUsage),
-                    heapSize: append(prev.dashboard.history.heapSize, newTick.history.heapSize),
-                    rssMemory: append(prev.dashboard.history.rssMemory, newTick.history.rssMemory),
-                    totalHeap: append(prev.dashboard.history.totalHeap, newTick.history.totalHeap),
-                    p95: newTick.history.p95 ? append(prev.dashboard.history.p95 ?? Array.from({ length: 60 }, () => 0), newTick.history.p95) : undefined,
-                    p99: newTick.history.p99 ? append(prev.dashboard.history.p99 ?? Array.from({ length: 60 }, () => 0), newTick.history.p99) : undefined
-                },
-                impactEndpoints: newTick.impactEndpoints,
-                alerts: newTick.alerts,
-
-                charts: {
-                    throughput: {
-                        rps: append(prev.dashboard.charts.throughput.rps, newTick.charts.throughput.rps),
-                        errorClient: append(prev.dashboard.charts.throughput.errorClient, newTick.charts.throughput.errorClient),
-                        errorServer: append(prev.dashboard.charts.throughput.errorServer, newTick.charts.throughput.errorServer),
-                        totalCount: newTick.charts.throughput.totalCount,
-                    },
-
-                    percentiles: {
-                        p50: append(prev.dashboard.charts.percentiles.p50, newTick.charts.percentiles.p50),
-                        p95: append(prev.dashboard.charts.percentiles.p95, newTick.charts.percentiles.p95),
-                        p99: append(prev.dashboard.charts.percentiles.p99, newTick.charts.percentiles.p99),
-                        totalCount: newTick.charts.percentiles.totalCount,
-                    },
-
-                    runtimePerformance: {
-                        heapUsage: append(prev.dashboard.charts.runtimePerformance.heapUsage, newTick.charts.runtimePerformance.heapUsage),
-                        heapSize: append(prev.dashboard.charts.runtimePerformance.heapSize, newTick.charts.runtimePerformance.heapSize),
-                        lag: append(prev.dashboard.charts.runtimePerformance.lag, newTick.charts.runtimePerformance.lag),
-                        totalCount: newTick.charts.runtimePerformance.totalCount,
-                    },
-                },
-            }
-        }));
-    }
-
     React.useEffect(() => {
-        if (!isConnected) {
-            cleanup();
-            return;
-        }
+        if (!isConnected) return;
 
-        try {
-            registerEventListener(WebSocketEvents.RESPONSE_SESSION_METADATA, sessionMetadata => {
+        const listeners: Array<[WebSocketEvents, Parameters<typeof registerEventListener>[1]]> = [
+            [WebSocketEvents.RESPONSE_SESSION_METADATA, sessionMetadata => {
                 setSessions(sessionMetadata.sessions);
                 setSelectedSession(null);
                 setSelectedSessionSummary(null);
-            });
-            registerEventListener(WebSocketEvents.RESPONSE_SESSION_SUMMARY, sessionSummary => {
+            }],
+            [WebSocketEvents.RESPONSE_SESSION_SUMMARY, sessionSummary => {
+                if (!sessionSummary) return;
                 setSelectedSessionSummary(sessionSummary);
                 setSelectedSession(sessionSummary.sessionNumber);
-            });
-            registerEventListener(WebSocketEvents.RESPONSE_SYSTEM_DATA, systemData => {
-                setData(prev => ({
-                    ...prev,
-                    systemInfo: systemData
-                }));
-            });
-            registerEventListener(WebSocketEvents.RESPONSE_DASHBOARD_DATA, dashboardData => {
-                setData(prev => ({
-                    ...prev,
-                    dashboard: dashboardData
-                }));
-            });
-            registerEventListener(WebSocketEvents.RESPONSE_DASHBOARD_TICK_DATA, dashboardTickData => {
-                appendTickData(dashboardTickData);
-            });
-            registerEventListener(WebSocketEvents.RESPONSE_ANALYTICS_DATA, analyticsData => {
+            }],
+            [WebSocketEvents.RESPONSE_SYSTEM_DATA, systemData => {
+                setData(prev => ({ ...prev, systemInfo: systemData }));
+            }],
+            [WebSocketEvents.RESPONSE_ANALYTICS_DATA, (analyticsData: AnalyticsData) => {
                 if (haveFilters(filtersRef.current)) {
-                    console.log("Received analytics data but filters are active.");
+                    setData(prev => ({ ...prev, impactEndpoints: analyticsData.impactEndpoints }));
                     emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, filtersRef.current);
                 } else {
-                    console.log("Received analytics data.");
-                    setData(prev => ({
-                        ...prev,
-                        analytics: analyticsData
-                    }));
+                    setData(prev => ({ ...prev, analytics: analyticsData, impactEndpoints: analyticsData.impactEndpoints }));
                 }
-            });
-            registerEventListener(WebSocketEvents.RESPONSE_FILTERED_ANALYTICS_DATA, analyticsData => {
-                console.log("Received filtered analytics data:", analyticsData);
-                setData(prev => ({
-                    ...prev,
-                    analytics: analyticsData
-                }));
-            });
-            registerEventListener(WebSocketEvents.RESPONSE_HEALTH_DATA, healthData => {
-                setData(prev => ({
-                    ...prev,
-                    health: healthData
-                }));
-            });
-            registerEventListener(WebSocketEvents.RESPONSE_CORRELATION_DATA, correlationData => {
-                setData(prev => ({
-                    ...prev,
-                    correlation: correlationData
-                }));
-            });
+            }],
+            [WebSocketEvents.RESPONSE_FILTERED_ANALYTICS_DATA, (analyticsData: AnalyticsData) => {
+                setData(prev => ({ ...prev, analytics: analyticsData, impactEndpoints: analyticsData.impactEndpoints }));
+            }],
+            [WebSocketEvents.RESPONSE_HEALTH_DATA, healthData => {
+                setData(prev => ({ ...prev, healthDetails: healthData }));
+            }],
+            [WebSocketEvents.RESPONSE_CORRELATION_DATA, correlationData => {
+                setData(prev => ({ ...prev, correlation: correlationData }));
+            }],
+            [WebSocketEvents.RESPONSE_INCIDENTS, (incidents: IncidentsSnapshot) => {
+                setData(prev => ({ ...prev, incidents }));
+            }],
+            [WebSocketEvents.RESPONSE_DASHBOARD_BUCKETS, (msg: BucketsMessage) => {
+                if (msg.subscriptionId !== null && msg.subscriptionId !== subscriptionId.current) return;
+                if (msg.kind === 'backfill') clearBackfill();
+                dispatch({ type: 'MESSAGE', message: msg });
+            }],
+        ];
+        for (const [event, cb] of listeners) registerEventListener(event, cb);
 
-            emit(WebSocketEvents.REQUEST_SYSTEM_DATA, null);
-            emit(WebSocketEvents.REQUEST_DASHBOARD_DATA, null);
-            emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, null);
-            emit(WebSocketEvents.REQUEST_HEALTH_DATA, null);
-            emit(WebSocketEvents.REQUEST_CORRELATION_DATA, null);
-            emit(WebSocketEvents.REQUEST_SESSION_METADATA, null);
-        } catch (error) {
-            console.error("Error fetching system status:", error);
-        }
+        emit(WebSocketEvents.REQUEST_SYSTEM_DATA, null);
+        emit(WebSocketEvents.REQUEST_ANALYTICS_DATA, null);
+        emit(WebSocketEvents.REQUEST_HEALTH_DATA, null);
+        emit(WebSocketEvents.REQUEST_CORRELATION_DATA, null);
+        emit(WebSocketEvents.REQUEST_INCIDENTS, null);
+        emit(WebSocketEvents.REQUEST_SESSION_METADATA, null);
 
+        clearBackfill();
+        requestBackfill(liveRef.current.latestSequence);
+
+        return () => {
+            for (const [event, cb] of listeners) unregisterEventListener(event, cb);
+            clearBackfill();
+        };
     }, [isConnected]);
+
+    React.useEffect(() => {
+        if (!isConnected || backfillPending.current || liveWindow.missing.length === 0) return;
+        requestBackfill(Math.min(...liveWindow.missing) - 1);
+    }, [liveWindow, isConnected]);
 
     React.useEffect(() => {
         filtersRef.current = filters;
@@ -221,6 +197,32 @@ export function MetricsProvider({
         }
 
         emit(WebSocketEvents.REQUEST_SESSION_SUMMARY, { sessionNumber });
+    }
+
+    function clearBackfill() {
+        if (backfillPending.current) clearTimeout(backfillPending.current.timer);
+        backfillPending.current = null;
+    }
+
+    function requestBackfill(afterSequence: number | null) {
+        const l = liveRef.current;
+        let afterEndTime: string | null = null;
+        if (afterSequence !== null) {
+            for (const b of l.buckets.values()) {
+                if (b.sequence === afterSequence) { afterEndTime = b.endTime; break; }
+            }
+        }
+        clearBackfill();
+        backfillPending.current = {
+            afterSequence,
+            timer: setTimeout(() => { backfillPending.current = null; }, BACKFILL_TIMEOUT_MS),
+        };
+        emit(WebSocketEvents.REQUEST_DASHBOARD_BUCKETS, {
+            subscriptionId: subscriptionId.current,
+            sessionId: l.sessionId,
+            afterSequence: l.sessionId === null ? null : afterSequence,
+            afterEndTime,
+        });
     }
 
     async function downloadSession(sessionNumber: number) {
@@ -246,13 +248,10 @@ export function MetricsProvider({
         });
     }
 
-    function cleanup() {
-
-    }
-
     return (
         <MetricsContext.Provider value={{
             data,
+            dashboard,
             analyticsFilterSettings: filters,
             sessions,
             selectedSession,

@@ -50,7 +50,7 @@ export class SessionRegistry {
             startedAt: new Date().toISOString(),
             endedAt: null,
             lastPersistedAt: null,
-            lastCommitedSequence: 0,
+            lastCommittedSequence: 0,
             status: 'RUNNING',
         };
         this.manifest.sessions.push(this._current);
@@ -62,7 +62,7 @@ export class SessionRegistry {
         if (!this._current) return;
         this._current.lastPersistedAt = new Date().toISOString();
         if (committedSequence !== undefined) {
-            this._current.lastCommitedSequence = Math.max(this._current.lastCommitedSequence, committedSequence);
+            this._current.lastCommittedSequence = Math.max(this._current.lastCommittedSequence, committedSequence);
         }
         this.dirty = true;
     }
@@ -80,7 +80,7 @@ export class SessionRegistry {
         this._current.status = 'COMPLETED';
         this._current.endedAt = now;
         this._current.lastPersistedAt = now;
-        this._current.lastCommitedSequence = this.writer.commitedSequence;
+        this.dirty = false;
         await this.save('manifest: session complete');
     }
 
@@ -126,7 +126,15 @@ export class SessionRegistry {
     }
 
     private migrate(raw: any): SessionManifest {
-        if (raw?.version === 2 && Array.isArray(raw.sessions)) return raw as SessionManifest;
+        if (raw?.version === 2 && Array.isArray(raw.sessions)) {
+            for (const s of raw.sessions) {
+                if (typeof s.lastCommittedSequence !== 'number') {
+                    s.lastCommittedSequence = typeof s.lastCommitedSequence === 'number' ? s.lastCommitedSequence : 0;
+                }
+                delete s.lastCommitedSequence;
+            }
+            return raw as SessionManifest;
+        }
         const sessions: SessionRecord[] = (raw?.sessionHistory ?? []).map((h: any) => ({
             sessionId: `legacy-${h.sessionNumber}`,
             sessionNumber: h.sessionNumber,

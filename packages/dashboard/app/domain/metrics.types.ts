@@ -73,3 +73,4 @@ interface HistoricSeries<T> {
 // Aggregated Historic Profiles
 export interface HistoricTimeSeries extends HistoricSeries<number[]> { }
 export interface HistoricTickSeries extends HistoricSeries<number> { }
+export interface HistoricGapSeries extends HistoricSeries<Array<number | null>> { }

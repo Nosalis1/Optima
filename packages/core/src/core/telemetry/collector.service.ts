@@ -1,13 +1,11 @@
 import {
     type SystemStaticInfo,
     type AnalyticsData,
-    type DashboardData,
-    type HealthData,
+    type HealthDetails,
     type AnalyticsFilterSettings,
-    type DashboardTickData,
-    emptyDashboardData,
-    emptyDashboardTickData,
-    emptyHealthData
+
+    type BucketsMessage,
+    type BucketsRequest
 } from '../domain';
 import type { LocalRepository } from "../storage";
 import type { ReadonlyConfig } from '../../config';
@@ -29,26 +27,20 @@ export class CollectorService {
         return this.runtimeService.getSystemStaticInfo();
     }
 
-    getDashboardData(): DashboardData {
-        const data = this.dashboardService.getDashboardData();
-        if (!data) return emptyDashboardData();
-        return data;
-    }
-
-    getDashboardTickData(): DashboardTickData {
-        const data = this.dashboardService.getDashboardLatest();
-        if (!data) return emptyDashboardTickData();
-        return data;
-    }
-
     getAnalyticsData(filters?: AnalyticsFilterSettings): AnalyticsData {
         return this.analyticsService.get(filters?.page || 1, 5, filters);
     }
 
-    getHealthData(): HealthData {
-        const data = this.runtimeService.get();
-        if (!data) return emptyHealthData();
-        return data;
+    getHealthData(): HealthDetails {
+        return this.runtimeService.get();
+    }
+
+    getLiveBuckets(): BucketsMessage | null {
+        return this.dashboardService.getLive();
+    }
+
+    getBackFill(req: BucketsRequest): Promise<BucketsMessage> {
+        return this.dashboardService.getBackFill(req);
     }
 
     tick() { this.storage.tick(); }

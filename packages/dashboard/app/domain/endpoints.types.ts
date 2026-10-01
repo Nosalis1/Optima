@@ -10,6 +10,7 @@ export interface EndpointTelemetry extends EndpointRoute {
     requestCount?: number;
     averageLatency?: number;
     minLatency?: number;
+    impactedRequests?: number;
 }
 
 export interface EndpointLatencyDistribution {

@@ -1,10 +1,13 @@
 import { type DashboardData } from '@/app/domain';
 import { Card } from '@/app/components/cards/card';
 import { LineGraph } from '@/src/components/graphs';
+import { bytesToMBOrNull } from '@/src/utility/number';
 
 type Props = {
     data: DashboardData;
 };
+
+const formatSecondsAgo = (value: number) => Math.round(value) === 0 ? 'now' : `${Math.round(value)}s`;
 
 export default function DashboardGraphs({ data }: Props) {
     return (
@@ -17,25 +20,26 @@ export default function DashboardGraphs({ data }: Props) {
                 <LineGraph
                     data={[
                         {
-                            points: data.history.rps.map((value, index) => ({ x: index, y: value })),
+                            points: data.history.rps.map((value, index) => ({ x: data.timeline[index], y: value })),
                             color: "var(--chart-6)",
                             type: 'solid',
                             label: "RPS"
                         },
                         {
-                            points: data.charts.throughput.errorClient.map((value, index) => ({ x: index, y: value })),
+                            points: data.charts.throughput.errorClient.map((value, index) => ({ x: data.timeline[index], y: value })),
                             color: "var(--chart-4)",
                             type: 'dashed',
                             label: "Client Errors (4xx)"
                         },
                         {
-                            points: data.charts.throughput.errorServer.map((value, index) => ({ x: index, y: value })),
+                            points: data.charts.throughput.errorServer.map((value, index) => ({ x: data.timeline[index], y: value })),
                             color: "var(--chart-5)",
                             type: 'dashed',
                             label: "Server Errors (5xx)"
                         }
                     ]}
                     withDots={false}
+                    formatXLabel={formatSecondsAgo}
                 />
             </Card>
 
@@ -47,21 +51,21 @@ export default function DashboardGraphs({ data }: Props) {
                 <LineGraph
                     data={[
                         {
-                            points: data.charts.percentiles.p50.map((value, index) => ({ x: index, y: value })),
+                            points: data.charts.percentiles.p50.map((value, index) => ({ x: data.timeline[index], y: value })),
                             color: "var(--chart-1)",
                             type: 'dashed',
                             label: "P50 ms",
                             fillArea: false
                         },
                         {
-                            points: data.charts.percentiles.p95.map((value, index) => ({ x: index, y: value })),
+                            points: data.charts.percentiles.p95.map((value, index) => ({ x: data.timeline[index], y: value })),
                             color: "var(--chart-2)",
                             type: 'dashed',
                             label: "P95 ms",
                             fillArea: false
                         },
                         {
-                            points: data.charts.percentiles.p99.map((value, index) => ({ x: index, y: value })),
+                            points: data.charts.percentiles.p99.map((value, index) => ({ x: data.timeline[index], y: value })),
                             color: "var(--chart-4)",
                             type: 'dashed',
                             label: "P99 ms",
@@ -69,6 +73,7 @@ export default function DashboardGraphs({ data }: Props) {
                         }
                     ]}
                     withDots={false}
+                    formatXLabel={formatSecondsAgo}
                 />
             </Card>
 
@@ -80,20 +85,21 @@ export default function DashboardGraphs({ data }: Props) {
                 <LineGraph
                     data={[
                         {
-                            points: data.charts.runtimePerformance.heapUsage.map((value, index) => ({ x: index, y: value })),
+                            points: data.charts.runtimePerformance.heapUsage.map((value, index) => ({ x: data.timeline[index], y: bytesToMBOrNull(value) })),
                             color: "var(--chart-1)",
                             type: 'solid',
-                            label: "heapUsed",
+                            label: "heapUsed MB",
                             fillArea: false
                         },
                         {
-                            points: data.charts.runtimePerformance.heapSize.map((value, index) => ({ x: index, y: value })),
+                            points: data.charts.runtimePerformance.heapSize.map((value, index) => ({ x: data.timeline[index], y: bytesToMBOrNull(value) })),
                             color: "var(--chart-2)",
                             type: 'dashed',
-                            label: "heapTotal"
+                            label: "heapTotal MB"
                         }
                     ]}
                     withDots={false}
+                    formatXLabel={formatSecondsAgo}
                 />
             </Card>
 
@@ -105,7 +111,7 @@ export default function DashboardGraphs({ data }: Props) {
                 <LineGraph
                     data={[
                         {
-                            points: data.charts.runtimePerformance.lag.map((value, index) => ({ x: index, y: value })),
+                            points: data.charts.runtimePerformance.lag.map((value, index) => ({ x: data.timeline[index], y: value })),
                             color: "var(--chart-4)",
                             type: 'solid',
                             label: "lag",
@@ -113,6 +119,7 @@ export default function DashboardGraphs({ data }: Props) {
                         }
                     ]}
                     withDots={false}
+                    formatXLabel={formatSecondsAgo}
                 />
             </Card>
         </div>
