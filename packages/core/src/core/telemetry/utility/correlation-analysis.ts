@@ -8,12 +8,12 @@ import {
     determinationAndAlienation,
     difference,
     laggedCorrelation
-} from '../utility/statistics';
+} from '../../utility/statistics';
 import {
     CorrelationStatus,
     CorrelationDirection,
     CorrelationAnalysis
-} from '../domain';
+} from '../../domain';
 
 interface AnalyzeCorrelationOptions {
     strongThreshold?: number;
@@ -173,7 +173,7 @@ function describe(
     direction: CorrelationDirection,
     ctx: DescribeContext
 ): string {
-    const sign = direction === 'NEGATIVE' ? 'negativna' : 'pozitivna';
+    const sign = direction === 'NEGATIVE' ? 'negative' : 'positive';
     const parts: string[] = [];
 
     if (status === 'STRONG_LINEAR_ASSOCIATION') {

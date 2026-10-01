@@ -26,6 +26,9 @@ interface Snapshot {
 }
 
 export class DashboardService {
+
+    private lastTickSequence = 0;
+
     constructor(
         private readonly storage: LocalRepository
     ) { }

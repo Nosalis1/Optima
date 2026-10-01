@@ -33,6 +33,7 @@ import Logger from "../telemetry/logger";
 import type { MetricBucket } from "./stores/bucket-metric";
 import { SegmentIndex } from "./persistence/segment-index";
 import type { CommittedBucketSource, QueryIssue, TelemetryQueryService } from "../telemetry/telemetry-query.service";
+import type { CorrelationFinding } from "../telemetry/utility/correlation-finding";
 
 type HttpMetricRecord = {
     method: string;
@@ -191,6 +192,18 @@ export class PersistenceRepository {
         } catch {
             return false;
         }
+    }
+
+    async saveCorrelationFinding(finding: CorrelationFinding): Promise<boolean> {
+        if (!this.enabled) return false;
+        const session = await this.ready;
+        if (!session) return false;
+        try {
+            await this.writer.enqueueAppend(this.baseDir, 'correlation',
+                [{ recordId: finding.findingId, payload: finding }]);
+            this.registry.notePersisted();
+            return true;
+        } catch { return false; }
     }
 
     //! Deprecated, as we will persist the whole bucket instead of analized data

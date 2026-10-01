@@ -50,7 +50,11 @@ export function createOptimaRuntime(config: ReadonlyConfig): OptimaRuntimeDepend
         runtime,
         config
     );
-    const correlation = new CorrelationService(storage, queries);
+    const correlation = new CorrelationService(storage, {
+        queries,
+        finding: { save: f => persistence.saveCorrelationFinding(f) },
+        identity: { sessionId: () => persistence.sessionId, instanceId: storage.bucket.instanceId },
+    }, { transform: 'raw', scopes: [{}] });
     const telemetry = new TelemetryService(storage, config);
 
     return {

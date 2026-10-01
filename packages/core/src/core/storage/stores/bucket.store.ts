@@ -114,6 +114,7 @@ export class BucketStore {
         return bucket;
     }
 
+    get instanceId(): string { return this.options.instanceId; }
     markCommitted(sequence: number): void {
         this.committed.add(sequence);
         const oldest = this.history.values()[0]?.sequence ?? sequence;
