@@ -16,6 +16,16 @@ type Props = {
     defaultColor?: string;
 };
 
+const LABEL_CHAR_WIDTH = 6;
+
+function fitLabel(label: string, maxWidth: number): string {
+    const maxChars = Math.max(3, Math.floor(maxWidth / LABEL_CHAR_WIDTH));
+    if (label.length <= maxChars) return label;
+    const keep = maxChars - 1;
+    const head = Math.ceil(keep / 2);
+    return `${label.slice(0, head)}…${label.slice(label.length - (keep - head))}`;
+}
+
 export default function BarChart({
     categories,
     data,
@@ -63,7 +73,7 @@ export default function BarChart({
             isHydrated={isHydrated}
             chartWidth={chartWidth}
             chartHeight={chartHeight}
-            xAxisLabels={categories}
+            xAxisLabels={[]}
             yAxisLabels={yAxisLabels}
             rows={rowCount}
             cols={categoryCount}
@@ -96,6 +106,18 @@ export default function BarChart({
 
                 return (
                     <g key={`category-${catIdx}`}>
+                        <text
+                            x={padding.left + catIdx * groupWidth + groupWidth / 2}
+                            y={chartHeight - padding.bottom + 16}
+                            textAnchor="middle"
+                            fill="var(--color-accent-soft)"
+                            fontSize="10px"
+                            fontWeight="500"
+                            className="select-none"
+                        >
+                            <title>{category}</title>
+                            {fitLabel(category, groupWidth - 4)}
+                        </text>
                         {data.map((series, seriesIdx) => {
                             const value = series.values[catIdx] ?? 0;
                             const fillColor = series.color || defaultColor;

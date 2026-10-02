@@ -89,10 +89,11 @@ export default function GaugeGraph({
 
     return (
         <div ref={ref} className="relative w-full h-full p-4 flex flex-col items-center justify-center">
-            {isHydrated && (
+            {(
                 <svg
                     className="w-full h-full overflow-visible"
                     viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    style={{ visibility: isHydrated ? 'visible' : 'hidden' }}
                 >
                     <path
                         d={describeArc(cx, cy, outerRadius, startAngle, endAngle)}

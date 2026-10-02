@@ -131,16 +131,15 @@ export const Grid = React.forwardRef<HTMLDivElement, Props>(function Grid({
                 id="graph-root"
                 className="relative w-full h-full max-h-[300px]"
             >
-                {isHydrated && (
-                    <svg
-                        className="w-full h-full overflow-visible"
-                        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                        preserveAspectRatio="none"
-                    >
-                        {renderGrid()}
-                        {children}
-                    </svg>
-                )}
+                <svg
+                    className="w-full h-full overflow-visible"
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    preserveAspectRatio="none"
+                    style={{ visibility: isHydrated ? 'visible' : 'hidden' }}
+                >
+                    {isHydrated && renderGrid()}
+                    {isHydrated && children}
+                </svg>
             </div>
         </div>
     );

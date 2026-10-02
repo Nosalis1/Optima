@@ -1,9 +1,9 @@
 import { Card } from "@/app/components/cards/card";
-import type { Incident, SessionSummary, SessionSummaryPoint } from "../../domain";
+import type { Incident, SessionRouteImpact, SessionSummary, SessionSummaryPoint } from "../../domain";
 import { DownloadIcon } from "@/app/components/shared/icons";
 import { Hero, HeroHeader } from '../../components/cards/hero';
 import { LineGraph } from "../../../src/components/graphs/index";
-import { SmallTable } from "@/src/components/tables/SmallTable";
+import { DataTable, type Column } from "@/src/components/tables/DataTable";
 import { formatBigNumber } from "@/src/utility/number";
 import { useMetrics } from "@/app/context/metrics.context";
 
@@ -23,6 +23,15 @@ const INCIDENT_COLOR: Record<Incident['status'], string> = {
     FIRING: 'border-[var(--chart-5)]',
     RESOLVED: 'border-[var(--chart-1)]',
 };
+
+const ROUTE_COLUMNS: Column<SessionRouteImpact>[] = [
+    { header: 'Method', render: route => <span className="font-semibold">{route.method}</span> },
+    { header: 'Route', render: route => route.route },
+    { header: 'Impacted', numeric: true, render: route => formatBigNumber(route.impactedRequests) },
+    { header: 'Requests', numeric: true, render: route => formatBigNumber(route.requestCount) },
+    { header: 'P95', numeric: true, render: route => `${route.p95.toFixed(1)} ms` },
+    { header: '5xx', numeric: true, render: route => `${(route.serverErrorRate * 100).toFixed(2)} %` },
+];
 
 function formatDuration(ms: number): string {
     const totalSeconds = Math.round(ms / 1000);
@@ -70,17 +79,8 @@ export function Selection({ selected }: Props) {
     const { quality } = selected;
     const openIncidents = selected.incidents.filter(i => i.status === 'FIRING').length;
 
-    const routes = selected.topRoutes.map(route => ({
-        "METHOD": route.method,
-        "ROUTE": route.route,
-        "IMPACTED": route.impactedRequests,
-        "REQUESTS": route.requestCount,
-        "P95": `${route.p95.toFixed(2)} ms`,
-        "5XX%": `${formatPercent(route.serverErrorRate)} %`,
-    }));
-
     return (
-        <div className="flex flex-col h-full w-full gap-2">
+        <div className="flex flex-col h-full w-full gap-2 pb-4">
             <Card padding>
                 <div className="flex flex-col gap-1 w-full">
                     <div className="flex w-full justify-between">
@@ -174,9 +174,12 @@ export function Selection({ selected }: Props) {
                         description: "5xx + slow requests",
                         tooltip: "Routes ranked by impacted requests in this session: server errors (5xx) plus requests slower than the slow latency threshold."
                     }}>
-                        {routes.length > 0
-                            ? <SmallTable columns={["METHOD", "ROUTE", "IMPACTED", "REQUESTS", "P95", "5XX%"]} data={routes} />
-                            : <p className="text-sm text-gray-500 p-4">No impacted routes.</p>}
+                        <DataTable
+                            columns={ROUTE_COLUMNS}
+                            rows={selected.topRoutes}
+                            rowKey={route => `${route.method}:${route.route}`}
+                            emptyText="No impacted routes."
+                        />
                     </Card>
                 </div>
                 <div className="md:col-span-2">

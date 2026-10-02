@@ -1,6 +1,7 @@
 import { type EndpointTelemetry, type IncidentRuleStatus, type IncidentsSnapshot, type IncidentState } from '@/app/domain';
 import { Card } from '@/app/components/cards/card';
-import { SmallTable } from '@/src/components/tables/SmallTable';
+import { DataTable, StatusText, type Column } from '@/src/components/tables/DataTable';
+import { formatBigNumber } from '@/src/utility/number';
 
 type Props = {
     impactEndpoints: EndpointTelemetry[];
@@ -62,27 +63,28 @@ function IncidentsTable({ data }: { data: IncidentsSnapshot }) {
     );
 }
 
+const IMPACT_COLUMNS: Column<EndpointTelemetry>[] = [
+    { header: 'Method', render: row => <span className="font-semibold">{row.method}</span> },
+    { header: 'Route', render: row => row.route },
+    { header: 'Impacted', numeric: true, render: row => formatBigNumber(row.impactedRequests ?? 0) },
+    { header: 'RPS', numeric: true, render: row => row.rps.toFixed(1) },
+    { header: 'P95', numeric: true, render: row => `${row.p95.toFixed(1)} ms` },
+    { header: 'Errors', numeric: true, render: row => `${(row.errorRate * 100).toFixed(2)} %` },
+    { header: 'Status', render: row => <StatusText label={row.status ?? ''} color={row.status === 'HEALTHY' ? 'var(--chart-3)' : 'var(--chart-5)'} /> },
+];
+
 function ImpactTable({ data }: { data: EndpointTelemetry[] }) {
-
-    const remapData = data.map((item) => ({
-        "METHOD": item.method,
-        "ROUTE": item.route,
-        "IMPACTED": item.impactedRequests ?? 0,
-        "RPS": item.rps.toFixed(1),
-        "P95": `${item.p95.toFixed(2)} ms`,
-        "ERR%": `${(item.errorRate * 100).toFixed(2)} %`,
-        "STATUS": item.status
-    }));
-
     return (
         <Card header={{
             title: "Top routes by Impact",
             description: "5xx + slow requests",
             tooltip: "Routes ranked by impacted requests in the recent window: server errors (5xx) plus requests slower than the slow latency threshold."
         }}>
-            <SmallTable
-                columns={["METHOD", "ROUTE", "IMPACTED", "RPS", "P95", "ERR%", "STATUS"]}
-                data={remapData}
+            <DataTable
+                columns={IMPACT_COLUMNS}
+                rows={data}
+                rowKey={row => `${row.method}:${row.route}`}
+                emptyText="No impacted routes."
             />
         </Card>
     );
